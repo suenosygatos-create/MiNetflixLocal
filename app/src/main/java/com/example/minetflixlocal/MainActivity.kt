@@ -135,7 +135,7 @@ fun saveImageLocally(context: Context, videoId: Long, sourceUri: Uri): Uri? {
         getPrefs(context).edit().putString("custom_img_$videoId", localUri.toString()).apply()
         localUri
     } catch (e: Exception) {
-        e.printStackTrace Lar
+        e.printStackTrace()
         null
     }
 }
@@ -431,7 +431,6 @@ fun SettingsScreen(
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Cambio de Usuario
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
@@ -460,7 +459,6 @@ fun SettingsScreen(
             }
         }
 
-        // Resumen
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
@@ -474,7 +472,6 @@ fun SettingsScreen(
             }
         }
 
-        // Restablecer Videos Ocultos
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
@@ -855,11 +852,9 @@ fun loadLocalVideosGroupedByFolder(context: Context): Map<String, List<VideoFile
                 id
             )
 
-            // Cargar imagen personalizada si fue guardada localmente
             val savedImageUriString = loadCustomImage(context, id)
             var customImageUri: Uri? = savedImageUriString?.let { Uri.parse(it) }
 
-            // Si no hay imagen guardada, intentar buscar .jpg/.png adyacente
             if (customImageUri == null && dataColumn != -1) {
                 val filePath = cursor.getString(dataColumn)
                 if (filePath != null) {
