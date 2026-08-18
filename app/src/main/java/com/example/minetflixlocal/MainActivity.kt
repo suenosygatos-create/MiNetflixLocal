@@ -770,7 +770,6 @@ fun CompactBottomNavigation(
 }
 
 @Composable
-@Composable
 fun VideoPlayerScreen(
     videoUri: Uri,
     onBack: () -> Unit
