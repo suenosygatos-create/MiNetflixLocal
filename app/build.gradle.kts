@@ -53,9 +53,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-video:2.6.0")
 
-    // Media3 ExoPlayer y decodificadores de audio/video
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
-    implementation("androidx.media3:media3-decoder:1.2.1")
-    implementation("androidx.media3:media3-extractor:1.2.1")
+    // Motor LibVLC (Soporta AC3, DTS, Dolby, MKV, etc.)
+    implementation("org.videolan.android:libvlc-all:3.6.0-eap13")
 }
