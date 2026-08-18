@@ -19,11 +19,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -55,15 +62,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    background = Color(0xFF141414),
-                    surface = Color(0xFF1F1F1F),
+                    background = Color.Black,
+                    surface = Color(0xFF121212),
                     onBackground = Color.White,
                     onSurface = Color.White
                 )
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = Color.Black
                 ) {
                     VideoAppScreen()
                 }
@@ -105,7 +112,7 @@ fun VideoAppScreen() {
         )
     } else {
         if (hasPermission) {
-            NetflixHomeScreen(
+            NetflixMainLayout(
                 groupedVideos = videosByFolder,
                 onVideoSelect = { selectedVideoUri = it.uri }
             )
@@ -114,61 +121,189 @@ fun VideoAppScreen() {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "Se requiere permiso para acceder a tus videos.",
-                    color = Color.White
-                )
+                Text("Se requiere permiso de acceso a videos.", color = Color.White)
             }
         }
     }
 }
 
 @Composable
-fun NetflixHomeScreen(
+fun NetflixMainLayout(
     groupedVideos: Map<String, List<VideoFile>>,
     onVideoSelect: (VideoFile) -> Unit
 ) {
-    if (groupedVideos.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("No se encontraron videos en el dispositivo.", color = Color.Gray)
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            item {
-                Text(
-                    text = "Mi Netflix Local",
-                    color = Color(0xFFE50914), // Rojo Netflix
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+    Scaffold(
+        bottomBar = { NetflixBottomNavigation() },
+        containerColor = Color.Black
+    ) { innerPadding ->
+        if (groupedVideos.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No se encontraron videos locales.", color = Color.Gray)
             }
+        } else {
+            val allVideos = groupedVideos.values.flatten()
+            val featuredVideo = remember(allVideos) { allVideos.firstOrNull() }
 
-            items(groupedVideos.keys.toList()) { folderName ->
-                val videosInFolder = groupedVideos[folderName] ?: emptyList()
-                FolderSection(
-                    folderName = folderName,
-                    videos = videosInFolder,
-                    onVideoSelect = onVideoSelect
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // Banner Destacado (Hero Item)
+                if (featuredVideo != null) {
+                    item {
+                        NetflixHeroBanner(
+                            video = featuredVideo,
+                            onPlayClick = { onVideoSelect(featuredVideo) }
+                        )
+                    }
+                }
+
+                // Selector de Categorías Superiores
+                item {
+                    NetflixCategoryTabs()
+                }
+
+                // Filas de Categorías (Carretes)
+                items(groupedVideos.keys.toList()) { folderName ->
+                    val videosInFolder = groupedVideos[folderName] ?: emptyList()
+                    NetflixFolderRow(
+                        folderName = folderName,
+                        videos = videosInFolder,
+                        onVideoSelect = onVideoSelect
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun FolderSection(
+fun NetflixHeroBanner(
+    video: VideoFile,
+    onPlayClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val imageModel = video.customImageUri ?: video.uri
+    val painter = rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(imageModel)
+            .decoderFactory(VideoFrameDecoder.Factory())
+            .videoFrameMillis(2000)
+            .crossfade(true)
+            .build()
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(420.dp)
+    ) {
+        Image(
+            painter = painter,
+            contentDescription = video.name,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // Sombreado Degradado estilo Netflix (Top y Bottom)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.6f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.8f),
+                            Color.Black
+                        )
+                    )
+                )
+        )
+
+        // Logo 'N' Superior
+        Text(
+            text = "N",
+            color = Color(0xFFE50914),
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Black,
+            modifier = Modifier
+                .padding(16.dp)
+                .align(Alignment.TopStart)
+        )
+
+        // Información y Botón de Reproducción
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = video.name,
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "• Local • HD • Reproducción Inmediata",
+                color = Color.LightGray,
+                fontSize = 12.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onPlayClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .width(180.dp)
+                    .height(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.Black
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Reproducir", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun NetflixCategoryTabs() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        Text("Series", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text("Películas", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text("Categorías ▾", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+fun NetflixFolderRow(
     folderName: String,
     videos: List<VideoFile>,
     onVideoSelect: (VideoFile) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
         Text(
             text = folderName,
             color = Color.White,
@@ -179,23 +314,21 @@ fun FolderSection(
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(videos) { video ->
-                VideoPosterCard(video = video, onClick = { onVideoSelect(video) })
+                NetflixPosterCard(video = video, onClick = { onVideoSelect(video) })
             }
         }
     }
 }
 
 @Composable
-fun VideoPosterCard(
+fun NetflixPosterCard(
     video: VideoFile,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    
-    // Si hay una imagen personalizada (.jpg/.png con el mismo nombre) usa esa, si no extrae el frame del video
     val imageModel = video.customImageUri ?: video.uri
 
     val painter = rememberAsyncImagePainter(
@@ -207,35 +340,60 @@ fun VideoPosterCard(
             .build()
     )
 
-    Column(
+    Box(
         modifier = Modifier
-            .width(130.dp)
+            .width(115.dp)
+            .height(165.dp)
+            .clip(RoundedCornerShape(4.dp))
             .clickable { onClick() }
     ) {
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
-            modifier = Modifier
-                .width(130.dp)
-                .height(180.dp)
-        ) {
-            Image(
-                painter = painter,
-                contentDescription = video.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+        Image(
+            painter = painter,
+            contentDescription = video.name,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+fun NetflixBottomNavigation() {
+    NavigationBar(
+        containerColor = Color(0xFF121212),
+        contentColor = Color.White
+    ) {
+        NavigationBarItem(
+            selected = true,
+            onClick = { },
+            icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
+            label = { Text("Inicio", fontSize = 10.sp) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color.White,
+                selectedTextColor = Color.White,
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray,
+                indicatorColor = Color(0xFFE50914)
             )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = video.name,
-            color = Color.LightGray,
-            fontSize = 12.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = { },
+            icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Novedades") },
+            label = { Text("Próximamente", fontSize = 10.sp) },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = { },
+            icon = { Icon(Icons.Default.Download, contentDescription = "Descargas") },
+            label = { Text("Descargas", fontSize = 10.sp) },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
         )
     }
 }
@@ -270,14 +428,18 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        Button(
+        IconButton(
             onClick = onBack,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.6f)),
             modifier = Modifier
                 .padding(16.dp)
                 .align(Alignment.TopStart)
+                .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(50))
         ) {
-            Text("← Volver", color = Color.White)
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Volver",
+                tint = Color.White
+            )
         }
     }
 }
@@ -319,7 +481,6 @@ fun loadLocalVideosGroupedByFolder(context: Context): Map<String, List<VideoFile
                 id
             )
 
-            // Buscar si existe una imagen con el mismo nombre en la carpeta
             var customImageUri: Uri? = null
             if (dataColumn != -1) {
                 val filePath = cursor.getString(dataColumn)
@@ -341,7 +502,6 @@ fun loadLocalVideosGroupedByFolder(context: Context): Map<String, List<VideoFile
                 }
             }
 
-            // Nombre formateado para la UI (remueve extensión como .mp4)
             val displayName = rawName.substringBeforeLast(".")
 
             videos.add(
