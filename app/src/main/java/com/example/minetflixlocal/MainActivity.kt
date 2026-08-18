@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,6 +88,7 @@ fun VideoAppScreen() {
     var hasPermission by remember { mutableStateOf(false) }
     var videosByFolder by remember { mutableStateOf<Map<String, List<VideoFile>>>(emptyMap()) }
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var currentTab by remember { mutableStateOf("home") } // "home" o "folders"
 
     val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_VIDEO
@@ -104,6 +109,15 @@ fun VideoAppScreen() {
         launcher.launch(permissionToRequest)
     }
 
+    // Manejo del botón FÍSICO / GESTO de Volver Atrás del Celular
+    BackHandler(enabled = selectedVideoUri != null || currentTab != "home") {
+        if (selectedVideoUri != null) {
+            selectedVideoUri = null
+        } else if (currentTab != "home") {
+            currentTab = "home"
+        }
+    }
+
     if (selectedVideoUri != null) {
         VideoPlayerScreen(
             videoUri = selectedVideoUri!!,
@@ -113,6 +127,8 @@ fun VideoAppScreen() {
         if (hasPermission) {
             NetflixMainLayout(
                 groupedVideos = videosByFolder,
+                currentTab = currentTab,
+                onTabSelected = { currentTab = it },
                 onVideoSelect = { selectedVideoUri = it.uri }
             )
         } else {
@@ -129,10 +145,17 @@ fun VideoAppScreen() {
 @Composable
 fun NetflixMainLayout(
     groupedVideos: Map<String, List<VideoFile>>,
+    currentTab: String,
+    onTabSelected: (String) -> Unit,
     onVideoSelect: (VideoFile) -> Unit
 ) {
     Scaffold(
-        bottomBar = { NetflixBottomNavigation() },
+        bottomBar = { 
+            NetflixBottomNavigation(
+                currentTab = currentTab, 
+                onTabSelected = onTabSelected
+            ) 
+        },
         containerColor = Color.Black
     ) { innerPadding ->
         if (groupedVideos.isEmpty()) {
@@ -143,34 +166,95 @@ fun NetflixMainLayout(
                 Text("No se encontraron videos locales.", color = Color.Gray)
             }
         } else {
-            val allVideos = groupedVideos.values.flatten()
-            val featuredVideo = remember(allVideos) { allVideos.firstOrNull() }
+            if (currentTab == "home") {
+                // PANTALLA PRINCIPAL (Estilo Netflix)
+                val allVideos = groupedVideos.values.flatten()
+                val featuredVideo = remember(allVideos) { allVideos.firstOrNull() }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                if (featuredVideo != null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    if (featuredVideo != null) {
+                        item {
+                            NetflixHeroBanner(
+                                video = featuredVideo,
+                                onPlayClick = { onVideoSelect(featuredVideo) }
+                            )
+                        }
+                    }
+
                     item {
-                        NetflixHeroBanner(
-                            video = featuredVideo,
-                            onPlayClick = { onVideoSelect(featuredVideo) }
+                        NetflixCategoryTabs()
+                    }
+
+                    items(groupedVideos.keys.toList()) { folderName ->
+                        val videosInFolder = groupedVideos[folderName] ?: emptyList()
+                        NetflixFolderRow(
+                            folderName = folderName,
+                            videos = videosInFolder,
+                            onVideoSelect = onVideoSelect
                         )
                     }
                 }
+            } else {
+                // PANTALLA DE CARPETAS (Explorador de Categorías)
+                FoldersExplorerScreen(
+                    groupedVideos = groupedVideos,
+                    onVideoSelect = onVideoSelect,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+        }
+    }
+}
 
-                item {
-                    NetflixCategoryTabs()
-                }
+@Composable
+fun FoldersExplorerScreen(
+    groupedVideos: Map<String, List<VideoFile>>,
+    onVideoSelect: (VideoFile) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        item {
+            Text(
+                text = "Explorar Carpetas",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
 
-                items(groupedVideos.keys.toList()) { folderName ->
-                    val videosInFolder = groupedVideos[folderName] ?: emptyList()
-                    NetflixFolderRow(
-                        folderName = folderName,
-                        videos = videosInFolder,
-                        onVideoSelect = onVideoSelect
+        items(groupedVideos.keys.toList()) { folderName ->
+            val videos = groupedVideos[folderName] ?: emptyList()
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F1F)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "📁 $folderName (${videos.size} videos)",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(videos) { video ->
+                            NetflixPosterCard(video = video, onClick = { onVideoSelect(video) })
+                        }
+                    }
                 }
             }
         }
@@ -350,14 +434,17 @@ fun NetflixPosterCard(
 }
 
 @Composable
-fun NetflixBottomNavigation() {
+fun NetflixBottomNavigation(
+    currentTab: String,
+    onTabSelected: (String) -> Unit
+) {
     NavigationBar(
         containerColor = Color(0xFF121212),
         contentColor = Color.White
     ) {
         NavigationBarItem(
-            selected = true,
-            onClick = { },
+            selected = currentTab == "home",
+            onClick = { onTabSelected("home") },
             icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
             label = { Text("Inicio", fontSize = 10.sp) },
             colors = NavigationBarItemDefaults.colors(
@@ -369,13 +456,16 @@ fun NetflixBottomNavigation() {
             )
         )
         NavigationBarItem(
-            selected = false,
-            onClick = { },
+            selected = currentTab == "folders",
+            onClick = { onTabSelected("folders") },
             icon = { Icon(Icons.Default.List, contentDescription = "Carpetas") },
             label = { Text("Carpetas", fontSize = 10.sp) },
             colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color.White,
+                selectedTextColor = Color.White,
                 unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray
+                unselectedTextColor = Color.Gray,
+                indicatorColor = Color(0xFFE50914)
             )
         )
     }
