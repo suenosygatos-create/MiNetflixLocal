@@ -55,10 +55,6 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
-import org.videolan.libvlc.LibVLC
-import org.videolan.libvlc.Media
-import org.videolan.libvlc.MediaPlayer
-import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -770,6 +766,10 @@ fun CompactBottomNavigation(
     }
 }
 
+import android.content.Intent
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 @Composable
 fun VideoPlayerScreen(
     videoUri: Uri,
@@ -777,56 +777,32 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
 
-    // Creamos las instancias de LibVLC y MediaPlayer de forma segura
-    val libVLC = remember {
-        val options = arrayListOf(
-            "--no-time-stretch",
-            "--avcodec-hw=any"
-        )
-        LibVLC(context, options)
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(videoUri))
+            prepare()
+            playWhenReady = true
+        }
     }
-
-    val mediaPlayer = remember { MediaPlayer(libVLC) }
 
     DisposableEffect(Unit) {
         onDispose {
-            try {
-                mediaPlayer.stop()
-                mediaPlayer.detachViews()
-                mediaPlayer.release()
-                libVLC.release()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            exoPlayer.release()
         }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
-                VLCVideoLayout(ctx).apply {
-                    // Esperar a que la vista se adjunte a la ventana de forma segura
-                    post {
-                        try {
-                            mediaPlayer.attachViews(this, null, false, false)
-                            
-                            // Abrir mediante FileDescriptor para evitar fallos con content:// URIs
-                            val pfd = ctx.contentResolver.openFileDescriptor(videoUri, "r")
-                            if (pfd != null) {
-                                val media = Media(libVLC, pfd.fileDescriptor)
-                                mediaPlayer.media = media
-                                media.release()
-                                mediaPlayer.play()
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = true
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
+        // Botón superior para volver
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -839,6 +815,23 @@ fun VideoPlayerScreen(
                 contentDescription = "Volver",
                 tint = Color.White
             )
+        }
+
+        // Botón auxiliar en caso de códec no soportado por el hardware
+        Button(
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(videoUri, "video/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Abrir con reproductor externo"))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            Text("Abrir en reproductor externo", color = Color.White, fontSize = 12.sp)
         }
     }
 }
