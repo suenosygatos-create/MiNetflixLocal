@@ -782,12 +782,10 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
 
-    // Inicialización de LibVLC
     val libVLC = remember {
         val options = arrayListOf(
             "--no-time-stretch",
-            "--avcodec-hw=any",
-            "-vvv"
+            "--avcodec-hw=any"
         )
         LibVLC(context, options)
     }
