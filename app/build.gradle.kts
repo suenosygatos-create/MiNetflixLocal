@@ -49,10 +49,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
-    // Coil para miniaturas de video
+    // Coil para miniaturas
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-video:2.6.0")
 
-    // Motor LibVLC (Soporta AC3, DTS, Dolby, MKV, etc.)
+    // LibVLC (Motor de reproductor VLC)
     implementation("org.videolan.android:libvlc-all:3.6.0-eap13")
 }
