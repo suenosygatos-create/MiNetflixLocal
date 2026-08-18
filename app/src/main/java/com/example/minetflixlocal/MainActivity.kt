@@ -21,10 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -152,7 +151,6 @@ fun NetflixMainLayout(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Banner Destacado (Hero Item)
                 if (featuredVideo != null) {
                     item {
                         NetflixHeroBanner(
@@ -162,12 +160,10 @@ fun NetflixMainLayout(
                     }
                 }
 
-                // Selector de Categorías Superiores
                 item {
                     NetflixCategoryTabs()
                 }
 
-                // Filas de Categorías (Carretes)
                 items(groupedVideos.keys.toList()) { folderName ->
                     val videosInFolder = groupedVideos[folderName] ?: emptyList()
                     NetflixFolderRow(
@@ -209,7 +205,6 @@ fun NetflixHeroBanner(
             contentScale = ContentScale.Crop
         )
 
-        // Sombreado Degradado estilo Netflix (Top y Bottom)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -225,7 +220,6 @@ fun NetflixHeroBanner(
                 )
         )
 
-        // Logo 'N' Superior
         Text(
             text = "N",
             color = Color(0xFFE50914),
@@ -236,7 +230,6 @@ fun NetflixHeroBanner(
                 .align(Alignment.TopStart)
         )
 
-        // Información y Botón de Reproducción
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -378,18 +371,8 @@ fun NetflixBottomNavigation() {
         NavigationBarItem(
             selected = false,
             onClick = { },
-            icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Novedades") },
-            label = { Text("Próximamente", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray
-            )
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = { },
-            icon = { Icon(Icons.Default.Download, contentDescription = "Descargas") },
-            label = { Text("Descargas", fontSize = 10.sp) },
+            icon = { Icon(Icons.Default.List, contentDescription = "Carpetas") },
+            label = { Text("Carpetas", fontSize = 10.sp) },
             colors = NavigationBarItemDefaults.colors(
                 unselectedIconColor = Color.Gray,
                 unselectedTextColor = Color.Gray
