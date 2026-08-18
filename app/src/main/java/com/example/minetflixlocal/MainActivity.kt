@@ -29,7 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -110,14 +110,12 @@ fun VideoAppScreen() {
         }
     }
 
-    // Selector de imágenes de la galería del teléfono
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { newImageUri ->
             videoToEditImage?.let { targetVideo ->
                 targetVideo.customImageUri = newImageUri
-                // Forzar refresco de interfaz
                 videosByFolder = videosByFolder.toMap()
             }
         }
@@ -152,7 +150,6 @@ fun VideoAppScreen() {
                     onVideoSelect = { video -> detailVideo = video }
                 )
 
-                // Diálogo/Modal con detalles del video al tocar la miniatura
                 detailVideo?.let { video ->
                     VideoDetailModal(
                         video = video,
@@ -231,7 +228,6 @@ fun NetflixMainLayout(
                     }
                 }
             } else {
-                // Catálogo de Cuadrícula 3 Columnas
                 GridCatalogScreen(
                     allVideos = groupedVideos.values.flatten(),
                     onVideoSelect = onVideoSelect,
@@ -318,7 +314,6 @@ fun NetflixPosterCard(
             .width(115.dp)
             .height(165.dp)
             .clip(RoundedCornerShape(4.dp))
-            // Marco Rojo Fino (1.dp)
             .border(BorderStroke(1.dp, Color(0xFFE50914)), RoundedCornerShape(4.dp))
             .clickable { onClick() }
     ) {
@@ -497,7 +492,7 @@ fun NetflixBottomNavigation(
         NavigationBarItem(
             selected = currentTab == "grid",
             onClick = { onTabSelected("grid") },
-            icon = { Icon(Icons.Default.GridOn, contentDescription = "Catálogo") },
+            icon = { Icon(Icons.Default.List, contentDescription = "Cuadrícula") },
             label = { Text("Cuadrícula", fontSize = 10.sp) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color.White,
