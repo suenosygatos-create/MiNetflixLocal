@@ -3,6 +3,7 @@ package com.example.minetflixlocal
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -88,14 +90,41 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Funciones para guardar y cargar datos en el teléfono
+fun getPrefs(context: Context): SharedPreferences {
+    return context.getSharedPreferences("app_netflix_data", Context.MODE_PRIVATE)
+}
+
+fun saveHiddenVideos(context: Context, hiddenIds: Set<Long>) {
+    val prefs = getPrefs(context)
+    val stringSet = hiddenIds.map { it.toString() }.toSet()
+    prefs.edit().putStringSet("hidden_videos", stringSet).apply()
+}
+
+fun loadHiddenVideos(context: Context): Set<Long> {
+    val prefs = getPrefs(context)
+    val stringSet = prefs.getStringSet("hidden_videos", emptySet()) ?: emptySet()
+    return stringSet.mapNotNull { it.toLongOrNull() }.toSet()
+}
+
+fun saveCustomImage(context: Context, videoId: Long, imageUri: String) {
+    val prefs = getPrefs(context)
+    prefs.edit().putString("custom_img_$videoId", imageUri).apply()
+}
+
+fun loadCustomImage(context: Context, videoId: Long): String? {
+    val prefs = getPrefs(context)
+    return prefs.getString("custom_img_$videoId", null)
+}
+
 @Composable
 fun VideoAppScreen() {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(false) }
     var videosByFolder by remember { mutableStateOf<Map<String, List<VideoFile>>>(emptyMap()) }
-    var hiddenVideoIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var hiddenVideoIds by remember { mutableStateOf(loadHiddenVideos(context)) }
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
-    var currentTab by remember { mutableStateOf("home") } // "home", "grid", "settings"
+    var currentTab by remember { mutableStateOf("home") }
     var detailVideo by remember { mutableStateOf<VideoFile?>(null) }
     var videoToEditImage by remember { mutableStateOf<VideoFile?>(null) }
 
@@ -120,6 +149,7 @@ fun VideoAppScreen() {
         uri?.let { newImageUri ->
             videoToEditImage?.let { targetVideo ->
                 targetVideo.customImageUri = newImageUri
+                saveCustomImage(context, targetVideo.id, newImageUri.toString())
                 videosByFolder = videosByFolder.toMap()
             }
         }
@@ -139,7 +169,6 @@ fun VideoAppScreen() {
         }
     }
 
-    // Filtrar videos eliminados/ocultos
     val visibleGroupedVideos = remember(videosByFolder, hiddenVideoIds) {
         videosByFolder.mapValues { entry ->
             entry.value.filter { it.id !in hiddenVideoIds }
@@ -156,9 +185,15 @@ fun VideoAppScreen() {
             Box(modifier = Modifier.fillMaxSize()) {
                 NetflixMainLayout(
                     groupedVideos = visibleGroupedVideos,
+                    allVideosCount = videosByFolder.values.flatten().size,
+                    hiddenCount = hiddenVideoIds.size,
                     currentTab = currentTab,
                     onTabSelected = { currentTab = it },
-                    onVideoSelect = { video -> detailVideo = video }
+                    onVideoSelect = { video -> detailVideo = video },
+                    onRestoreHidden = {
+                        hiddenVideoIds = emptySet()
+                        saveHiddenVideos(context, emptySet())
+                    }
                 )
 
                 detailVideo?.let { video ->
@@ -174,7 +209,9 @@ fun VideoAppScreen() {
                             imagePickerLauncher.launch("image/*")
                         },
                         onRemoveVideo = {
-                            hiddenVideoIds = hiddenVideoIds + video.id
+                            val newSet = hiddenVideoIds + video.id
+                            hiddenVideoIds = newSet
+                            saveHiddenVideos(context, newSet)
                             detailVideo = null
                         }
                     )
@@ -194,9 +231,12 @@ fun VideoAppScreen() {
 @Composable
 fun NetflixMainLayout(
     groupedVideos: Map<String, List<VideoFile>>,
+    allVideosCount: Int,
+    hiddenCount: Int,
     currentTab: String,
     onTabSelected: (String) -> Unit,
-    onVideoSelect: (VideoFile) -> Unit
+    onVideoSelect: (VideoFile) -> Unit,
+    onRestoreHidden: () -> Unit
 ) {
     Scaffold(
         bottomBar = { 
@@ -248,7 +288,12 @@ fun NetflixMainLayout(
                 )
             }
             "settings" -> {
-                SettingsScreen(modifier = Modifier.padding(innerPadding))
+                SettingsScreen(
+                    allVideosCount = allVideosCount,
+                    hiddenCount = hiddenCount,
+                    onRestoreHidden = onRestoreHidden,
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
         }
     }
@@ -293,48 +338,81 @@ fun GridCatalogScreen(
 }
 
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    allVideosCount: Int,
+    hiddenCount: Int,
+    onRestoreHidden: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text(
-            text = "Ajustes de la Aplicación",
+            text = "Ajustes del Catálogo",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 20.dp)
+            modifier = Modifier.padding(bottom = 16.dp)
         )
 
+        // Tarjeta de Estado
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Modo de Reproducción", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Reproductor nativo en alta definición habilitado.", color = Color.Gray, fontSize = 12.sp)
+                Text("Resumen del Almacenamiento", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("• Total de videos en el celular: $allVideosCount", color = Color.LightGray, fontSize = 13.sp)
+                Text("• Videos ocultos del catálogo: $hiddenCount", color = Color.LightGray, fontSize = 13.sp)
             }
         }
 
+        // Restablecer Videos Ocultos
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Miniaturas Personalizadas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Las imágenes seleccionadas se guardan durante la sesión actual.", color = Color.Gray, fontSize = 12.sp)
+                Text("Gestión de Contenido", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Restaura todos los videos que eliminaste del catálogo.", color = Color.Gray, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                Button(
+                    onClick = onRestoreHidden,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
+                    enabled = hiddenCount > 0,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Restablecer Videos Ocultos ($hiddenCount)", color = Color.White)
+                }
+            }
+        }
+
+        // Configuración de Reproducción
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Persistencia de Datos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Las miniaturas y preferencias se guardan de forma nativa en tu dispositivo.", color = Color.Gray, fontSize = 12.sp)
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = "Mi Netflix Local v1.2",
+            text = "Mi Netflix Local v1.3 • Guardado Automático",
             color = Color.DarkGray,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
     }
@@ -560,7 +638,6 @@ fun NetflixHeroBanner(
     }
 }
 
-// Menú inferior angosto y limpio
 @Composable
 fun CompactBottomNavigation(
     currentTab: String,
@@ -687,8 +764,12 @@ fun loadLocalVideosGroupedByFolder(context: Context): Map<String, List<VideoFile
                 id
             )
 
-            var customImageUri: Uri? = null
-            if (dataColumn != -1) {
+            // Cargar imagen personalizada guardada
+            val savedImageUriString = loadCustomImage(context, id)
+            var customImageUri: Uri? = savedImageUriString?.let { Uri.parse(it) }
+
+            // Si no tiene imagen personalizada guardada, buscar .jpg/.png adyacente
+            if (customImageUri == null && dataColumn != -1) {
                 val filePath = cursor.getString(dataColumn)
                 if (filePath != null) {
                     val videoFile = File(filePath)
