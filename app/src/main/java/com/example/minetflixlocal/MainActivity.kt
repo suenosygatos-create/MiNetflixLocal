@@ -3,6 +3,7 @@ package com.example.minetflixlocal
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
@@ -51,6 +52,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
@@ -495,7 +499,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = "Mi Netflix Local v1.4 • Guardado Permanente",
+            text = "Mi Netflix Local v1.4",
             color = Color.DarkGray,
             fontSize = 11.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -766,10 +770,6 @@ fun CompactBottomNavigation(
     }
 }
 
-import android.content.Intent
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 @Composable
 fun VideoPlayerScreen(
     videoUri: Uri,
@@ -802,7 +802,6 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Botón superior para volver
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -817,7 +816,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Botón auxiliar en caso de códec no soportado por el hardware
         Button(
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -831,7 +829,7 @@ fun VideoPlayerScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            Text("Abrir en reproductor externo", color = Color.White, fontSize = 12.sp)
+            Text("Abrir con reproductor externo", color = Color.White, fontSize = 12.sp)
         }
     }
 }
