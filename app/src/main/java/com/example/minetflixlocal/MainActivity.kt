@@ -777,6 +777,7 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
 
+    // Creamos las instancias de LibVLC y MediaPlayer de forma segura
     val libVLC = remember {
         val options = arrayListOf(
             "--no-time-stretch",
@@ -789,9 +790,14 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            mediaPlayer.stop()
-            mediaPlayer.release()
-            libVLC.release()
+            try {
+                mediaPlayer.stop()
+                mediaPlayer.detachViews()
+                mediaPlayer.release()
+                libVLC.release()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -799,11 +805,23 @@ fun VideoPlayerScreen(
         AndroidView(
             factory = { ctx ->
                 VLCVideoLayout(ctx).apply {
-                    mediaPlayer.attachViews(this, null, false, false)
-                    val media = Media(libVLC, videoUri)
-                    mediaPlayer.media = media
-                    media.release()
-                    mediaPlayer.play()
+                    // Esperar a que la vista se adjunte a la ventana de forma segura
+                    post {
+                        try {
+                            mediaPlayer.attachViews(this, null, false, false)
+                            
+                            // Abrir mediante FileDescriptor para evitar fallos con content:// URIs
+                            val pfd = ctx.contentResolver.openFileDescriptor(videoUri, "r")
+                            if (pfd != null) {
+                                val media = Media(libVLC, pfd.fileDescriptor)
+                                mediaPlayer.media = media
+                                media.release()
+                                mediaPlayer.play()
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
                 }
             },
             modifier = Modifier.fillMaxSize()
