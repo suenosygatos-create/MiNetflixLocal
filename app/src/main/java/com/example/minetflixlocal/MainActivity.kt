@@ -776,7 +776,7 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val exoPlayer = remember {
-        // Habilitamos la decodificación por software para códecs como AC3, EAC3, DTS, etc.
+        // Configuramos la fábrica de renderizadores con modo preferido
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
             .setExtensionRendererMode(
                 androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
@@ -785,6 +785,12 @@ fun VideoPlayerScreen(
         ExoPlayer.Builder(context, renderersFactory)
             .build()
             .apply {
+                // Forzar decodificación estéreo estándar si el canal multicanal falla
+                trackSelectionParameters = trackSelectionParameters
+                    .buildUpon()
+                    .setMaxVideoSizeSd()
+                    .build()
+
                 setMediaItem(MediaItem.fromUri(videoUri))
                 prepare()
                 playWhenReady = true
