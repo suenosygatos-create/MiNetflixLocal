@@ -769,45 +769,47 @@ fun CompactBottomNavigation(
     }
 }
 
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
+
 @Composable
 fun VideoPlayerScreen(
     videoUri: Uri,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val exoPlayer = remember {
-        // Configuramos la fábrica de renderizadores con modo preferido
-        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
-            .setExtensionRendererMode(
-                androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-            )
 
-        ExoPlayer.Builder(context, renderersFactory)
-            .build()
-            .apply {
-                // Forzar decodificación estéreo estándar si el canal multicanal falla
-                trackSelectionParameters = trackSelectionParameters
-                    .buildUpon()
-                    .setMaxVideoSizeSd()
-                    .build()
-
-                setMediaItem(MediaItem.fromUri(videoUri))
-                prepare()
-                playWhenReady = true
-            }
+    // Inicialización de LibVLC
+    val libVLC = remember {
+        val options = arrayListOf(
+            "--no-time-stretch",
+            "--avcodec-hw=any",
+            "-vvv"
+        )
+        LibVLC(context, options)
     }
+
+    val mediaPlayer = remember { MediaPlayer(libVLC) }
 
     DisposableEffect(Unit) {
         onDispose {
-            exoPlayer.release()
+            mediaPlayer.stop()
+            mediaPlayer.release()
+            libVLC.release()
         }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
+                VLCVideoLayout(ctx).apply {
+                    mediaPlayer.attachViews(this, null, false, false)
+                    val media = Media(libVLC, videoUri)
+                    mediaPlayer.media = media
+                    media.release()
+                    mediaPlayer.play()
                 }
             },
             modifier = Modifier.fillMaxSize()
