@@ -24,13 +24,16 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,15 +71,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    background = Color.Black,
-                    surface = Color(0xFF121212),
+                    background = Color(0xFF0D0D0D),
+                    surface = Color(0xFF161616),
                     onBackground = Color.White,
                     onSurface = Color.White
                 )
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.Black
+                    color = Color(0xFF0D0D0D)
                 ) {
                     VideoAppScreen()
                 }
@@ -90,8 +93,9 @@ fun VideoAppScreen() {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(false) }
     var videosByFolder by remember { mutableStateOf<Map<String, List<VideoFile>>>(emptyMap()) }
+    var hiddenVideoIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
-    var currentTab by remember { mutableStateOf("home") }
+    var currentTab by remember { mutableStateOf("home") } // "home", "grid", "settings"
     var detailVideo by remember { mutableStateOf<VideoFile?>(null) }
     var videoToEditImage by remember { mutableStateOf<VideoFile?>(null) }
 
@@ -135,6 +139,13 @@ fun VideoAppScreen() {
         }
     }
 
+    // Filtrar videos eliminados/ocultos
+    val visibleGroupedVideos = remember(videosByFolder, hiddenVideoIds) {
+        videosByFolder.mapValues { entry ->
+            entry.value.filter { it.id !in hiddenVideoIds }
+        }.filterValues { it.isNotEmpty() }
+    }
+
     if (selectedVideoUri != null) {
         VideoPlayerScreen(
             videoUri = selectedVideoUri!!,
@@ -144,7 +155,7 @@ fun VideoAppScreen() {
         if (hasPermission) {
             Box(modifier = Modifier.fillMaxSize()) {
                 NetflixMainLayout(
-                    groupedVideos = videosByFolder,
+                    groupedVideos = visibleGroupedVideos,
                     currentTab = currentTab,
                     onTabSelected = { currentTab = it },
                     onVideoSelect = { video -> detailVideo = video }
@@ -161,6 +172,10 @@ fun VideoAppScreen() {
                         onChangeImage = {
                             videoToEditImage = video
                             imagePickerLauncher.launch("image/*")
+                        },
+                        onRemoveVideo = {
+                            hiddenVideoIds = hiddenVideoIds + video.id
+                            detailVideo = null
                         }
                     )
                 }
@@ -185,56 +200,67 @@ fun NetflixMainLayout(
 ) {
     Scaffold(
         bottomBar = { 
-            NetflixBottomNavigation(
+            CompactBottomNavigation(
                 currentTab = currentTab, 
                 onTabSelected = onTabSelected
             ) 
         },
-        containerColor = Color.Black
+        containerColor = Color(0xFF0D0D0D)
     ) { innerPadding ->
-        if (groupedVideos.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No se encontraron videos locales.", color = Color.Gray)
-            }
-        } else {
-            if (currentTab == "home") {
-                val allVideos = groupedVideos.values.flatten()
-                val featuredVideo = remember(allVideos) { allVideos.firstOrNull() }
+        when (currentTab) {
+            "home" -> {
+                if (groupedVideos.isEmpty()) {
+                    EmptyStateView(innerPadding)
+                } else {
+                    val allVideos = groupedVideos.values.flatten()
+                    val featuredVideo = remember(allVideos) { allVideos.firstOrNull() }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    if (featuredVideo != null) {
-                        item {
-                            NetflixHeroBanner(
-                                video = featuredVideo,
-                                onPlayClick = { onVideoSelect(featuredVideo) }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        if (featuredVideo != null) {
+                            item {
+                                NetflixHeroBanner(
+                                    video = featuredVideo,
+                                    onPlayClick = { onVideoSelect(featuredVideo) }
+                                )
+                            }
+                        }
+
+                        items(groupedVideos.keys.toList()) { folderName ->
+                            val videosInFolder = groupedVideos[folderName] ?: emptyList()
+                            NetflixFolderRow(
+                                folderName = folderName,
+                                videos = videosInFolder,
+                                onVideoSelect = onVideoSelect
                             )
                         }
                     }
-
-                    items(groupedVideos.keys.toList()) { folderName ->
-                        val videosInFolder = groupedVideos[folderName] ?: emptyList()
-                        NetflixFolderRow(
-                            folderName = folderName,
-                            videos = videosInFolder,
-                            onVideoSelect = onVideoSelect
-                        )
-                    }
                 }
-            } else {
+            }
+            "grid" -> {
                 GridCatalogScreen(
                     allVideos = groupedVideos.values.flatten(),
                     onVideoSelect = onVideoSelect,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
+            "settings" -> {
+                SettingsScreen(modifier = Modifier.padding(innerPadding))
+            }
         }
+    }
+}
+
+@Composable
+fun EmptyStateView(padding: PaddingValues) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("No hay videos disponibles en la biblioteca.", color = Color.Gray, fontSize = 14.sp)
     }
 }
 
@@ -244,19 +270,19 @@ fun GridCatalogScreen(
     onVideoSelect: (VideoFile) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxSize().padding(8.dp)) {
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Text(
-            text = "Catálogo de Miniaturas",
+            text = "Catálogo Visual",
             color = Color.White,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(vertical = 8.dp)
         )
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
             items(allVideos) { video ->
@@ -267,16 +293,64 @@ fun GridCatalogScreen(
 }
 
 @Composable
+fun SettingsScreen(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Ajustes de la Aplicación",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 20.dp)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Modo de Reproducción", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Reproductor nativo en alta definición habilitado.", color = Color.Gray, fontSize = 12.sp)
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Miniaturas Personalizadas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Las imágenes seleccionadas se guardan durante la sesión actual.", color = Color.Gray, fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Text(
+            text = "Mi Netflix Local v1.2",
+            color = Color.DarkGray,
+            fontSize = 12.sp,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+    }
+}
+
+@Composable
 fun NetflixFolderRow(
     folderName: String,
     videos: List<VideoFile>,
     onVideoSelect: (VideoFile) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Text(
             text = folderName,
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
         )
@@ -311,10 +385,10 @@ fun NetflixPosterCard(
 
     Box(
         modifier = Modifier
-            .width(115.dp)
-            .height(165.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .border(BorderStroke(1.dp, Color(0xFFE50914)), RoundedCornerShape(4.dp))
+            .width(110.dp)
+            .height(160.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .border(BorderStroke(1.dp, Color(0xFFE50914)), RoundedCornerShape(6.dp))
             .clickable { onClick() }
     ) {
         Image(
@@ -331,48 +405,67 @@ fun VideoDetailModal(
     video: VideoFile,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
-    onChangeImage: () -> Unit
+    onChangeImage: () -> Unit,
+    onRemoveVideo: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E1E),
+        containerColor = Color(0xFF1A1A1A),
+        shape = RoundedCornerShape(16.dp),
         title = {
             Text(
                 text = video.name,
                 color = Color.White,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         },
         text = {
-            Text(
-                text = "Carpeta: ${video.folderName}\n¿Qué deseas hacer con este video?",
-                color = Color.LightGray,
-                fontSize = 14.sp
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onPlay,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Reproducir", color = Color.White)
+            Column {
+                Text(
+                    text = "Carpeta: ${video.folderName}",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Button(
+                    onClick = onPlay,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reproducir Ahora", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedButton(
+                    onClick = onChangeImage,
+                    border = BorderStroke(1.dp, Color(0xFF444444)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Cambiar Miniatura", color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                TextButton(
+                    onClick = onRemoveVideo,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF4D4D))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Quitar del Catálogo", color = Color(0xFFFF4D4D))
+                }
             }
         },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onChangeImage,
-                border = BorderStroke(1.dp, Color.Gray)
-            ) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Cambiar Miniatura", color = Color.White)
-            }
-        }
+        confirmButton = {}
     )
 }
 
@@ -395,7 +488,7 @@ fun NetflixHeroBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(400.dp)
+            .height(380.dp)
     ) {
         Image(
             painter = painter,
@@ -410,10 +503,10 @@ fun NetflixHeroBanner(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.4f),
+                            Color.Black.copy(alpha = 0.3f),
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.8f),
-                            Color.Black
+                            Color(0xFF0D0D0D).copy(alpha = 0.8f),
+                            Color(0xFF0D0D0D)
                         )
                     )
                 )
@@ -422,7 +515,7 @@ fun NetflixHeroBanner(
         Text(
             text = "N",
             color = Color(0xFFE50914),
-            fontSize = 36.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Black,
             modifier = Modifier
                 .padding(16.dp)
@@ -438,70 +531,76 @@ fun NetflixHeroBanner(
             Text(
                 text = video.name,
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = onPlayClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White),
                 shape = RoundedCornerShape(4.dp),
                 modifier = Modifier
-                    .width(180.dp)
-                    .height(40.dp)
+                    .width(160.dp)
+                    .height(38.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
                     tint = Color.Black
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text("Reproducir", color = Color.Black, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
+// Menú inferior angosto y limpio
 @Composable
-fun NetflixBottomNavigation(
+fun CompactBottomNavigation(
     currentTab: String,
     onTabSelected: (String) -> Unit
 ) {
-    NavigationBar(
-        containerColor = Color(0xFF121212),
-        contentColor = Color.White
+    Surface(
+        color = Color(0xFF121212),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
     ) {
-        NavigationBarItem(
-            selected = currentTab == "home",
-            onClick = { onTabSelected("home") },
-            icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
-            label = { Text("Inicio", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray,
-                indicatorColor = Color(0xFFE50914)
-            )
-        )
-        NavigationBarItem(
-            selected = currentTab == "grid",
-            onClick = { onTabSelected("grid") },
-            icon = { Icon(Icons.Default.List, contentDescription = "Cuadrícula") },
-            label = { Text("Cuadrícula", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                unselectedIconColor = Color.Gray,
-                unselectedTextColor = Color.Gray,
-                indicatorColor = Color(0xFFE50914)
-            )
-        )
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { onTabSelected("home") }) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "Inicio",
+                    tint = if (currentTab == "home") Color(0xFFE50914) else Color.Gray
+                )
+            }
+
+            IconButton(onClick = { onTabSelected("grid") }) {
+                Icon(
+                    imageVector = Icons.Default.List,
+                    contentDescription = "Cuadrícula",
+                    tint = if (currentTab == "grid") Color(0xFFE50914) else Color.Gray
+                )
+            }
+
+            IconButton(onClick = { onTabSelected("settings") }) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Ajustes",
+                    tint = if (currentTab == "settings") Color(0xFFE50914) else Color.Gray
+                )
+            }
+        }
     }
 }
 
@@ -540,7 +639,7 @@ fun VideoPlayerScreen(
             modifier = Modifier
                 .padding(16.dp)
                 .align(Alignment.TopStart)
-                .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
