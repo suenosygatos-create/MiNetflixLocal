@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -58,6 +59,8 @@ import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 data class VideoFile(
     val id: Long,
@@ -90,7 +93,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Funciones para guardar y cargar datos en el teléfono
+// Control de datos con SharedPreferences
 fun getPrefs(context: Context): SharedPreferences {
     return context.getSharedPreferences("app_netflix_data", Context.MODE_PRIVATE)
 }
@@ -107,14 +110,38 @@ fun loadHiddenVideos(context: Context): Set<Long> {
     return stringSet.mapNotNull { it.toLongOrNull() }.toSet()
 }
 
-fun saveCustomImage(context: Context, videoId: Long, imageUri: String) {
-    val prefs = getPrefs(context)
-    prefs.edit().putString("custom_img_$videoId", imageUri).apply()
+fun saveUserName(context: Context, name: String) {
+    getPrefs(context).edit().putString("user_name", name).apply()
+}
+
+fun loadUserName(context: Context): String {
+    return getPrefs(context).getString("user_name", "Usuario") ?: "Usuario"
+}
+
+// Guarda una copia local permanente de la imagen
+fun saveImageLocally(context: Context, videoId: Long, sourceUri: Uri): Uri? {
+    return try {
+        val inputStream: InputStream? = context.contentResolver.openInputStream(sourceUri)
+        val file = File(context.filesDir, "custom_poster_$videoId.jpg")
+        val outputStream = FileOutputStream(file)
+
+        inputStream?.use { input ->
+            outputStream.use { output ->
+                input.copyTo(output)
+            }
+        }
+
+        val localUri = Uri.fromFile(file)
+        getPrefs(context).edit().putString("custom_img_$videoId", localUri.toString()).apply()
+        localUri
+    } catch (e: Exception) {
+        e.printStackTrace Lar
+        null
+    }
 }
 
 fun loadCustomImage(context: Context, videoId: Long): String? {
-    val prefs = getPrefs(context)
-    return prefs.getString("custom_img_$videoId", null)
+    return getPrefs(context).getString("custom_img_$videoId", null)
 }
 
 @Composable
@@ -123,6 +150,7 @@ fun VideoAppScreen() {
     var hasPermission by remember { mutableStateOf(false) }
     var videosByFolder by remember { mutableStateOf<Map<String, List<VideoFile>>>(emptyMap()) }
     var hiddenVideoIds by remember { mutableStateOf(loadHiddenVideos(context)) }
+    var userName by remember { mutableStateOf(loadUserName(context)) }
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
     var currentTab by remember { mutableStateOf("home") }
     var detailVideo by remember { mutableStateOf<VideoFile?>(null) }
@@ -148,9 +176,11 @@ fun VideoAppScreen() {
     ) { uri: Uri? ->
         uri?.let { newImageUri ->
             videoToEditImage?.let { targetVideo ->
-                targetVideo.customImageUri = newImageUri
-                saveCustomImage(context, targetVideo.id, newImageUri.toString())
-                videosByFolder = videosByFolder.toMap()
+                val savedUri = saveImageLocally(context, targetVideo.id, newImageUri)
+                if (savedUri != null) {
+                    targetVideo.customImageUri = savedUri
+                    videosByFolder = videosByFolder.toMap()
+                }
             }
         }
     }
@@ -187,6 +217,11 @@ fun VideoAppScreen() {
                     groupedVideos = visibleGroupedVideos,
                     allVideosCount = videosByFolder.values.flatten().size,
                     hiddenCount = hiddenVideoIds.size,
+                    userName = userName,
+                    onUserNameChange = { newName ->
+                        userName = newName
+                        saveUserName(context, newName)
+                    },
                     currentTab = currentTab,
                     onTabSelected = { currentTab = it },
                     onVideoSelect = { video -> detailVideo = video },
@@ -233,6 +268,8 @@ fun NetflixMainLayout(
     groupedVideos: Map<String, List<VideoFile>>,
     allVideosCount: Int,
     hiddenCount: Int,
+    userName: String,
+    onUserNameChange: (String) -> Unit,
     currentTab: String,
     onTabSelected: (String) -> Unit,
     onVideoSelect: (VideoFile) -> Unit,
@@ -260,6 +297,10 @@ fun NetflixMainLayout(
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
+                        item {
+                            UserGreetingHeader(userName = userName)
+                        }
+
                         if (featuredVideo != null) {
                             item {
                                 NetflixHeroBanner(
@@ -289,6 +330,8 @@ fun NetflixMainLayout(
             }
             "settings" -> {
                 SettingsScreen(
+                    userName = userName,
+                    onUserNameChange = onUserNameChange,
                     allVideosCount = allVideosCount,
                     hiddenCount = hiddenCount,
                     onRestoreHidden = onRestoreHidden,
@@ -296,6 +339,33 @@ fun NetflixMainLayout(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun UserGreetingHeader(userName: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFE50914)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Person, contentDescription = null, tint = Color.White)
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "Para $userName",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -317,7 +387,7 @@ fun GridCatalogScreen(
 ) {
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Text(
-            text = "Catálogo Visual",
+            text = "Películas y Series",
             color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
@@ -339,25 +409,58 @@ fun GridCatalogScreen(
 
 @Composable
 fun SettingsScreen(
+    userName: String,
+    onUserNameChange: (String) -> Unit,
     allVideosCount: Int,
     hiddenCount: Int,
     onRestoreHidden: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var textState by remember { mutableStateOf(userName) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text(
-            text = "Ajustes del Catálogo",
+            text = "Ajustes de Perfil",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Tarjeta de Estado
+        // Cambio de Usuario
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Perfil del Usuario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                OutlinedTextField(
+                    value = textState,
+                    onValueChange = { 
+                        textState = it
+                        onUserNameChange(it)
+                    },
+                    label = { Text("Nombre de Perfil", color = Color.Gray) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFE50914),
+                        unfocusedBorderColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        // Resumen
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
@@ -366,7 +469,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Resumen del Almacenamiento", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("• Total de videos en el celular: $allVideosCount", color = Color.LightGray, fontSize = 13.sp)
+                Text("• Total de videos detectados: $allVideosCount", color = Color.LightGray, fontSize = 13.sp)
                 Text("• Videos ocultos del catálogo: $hiddenCount", color = Color.LightGray, fontSize = 13.sp)
             }
         }
@@ -379,7 +482,7 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Gestión de Contenido", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Restaura todos los videos que eliminaste del catálogo.", color = Color.Gray, fontSize = 12.sp)
+                Text("Restaura todos los videos eliminados previamente.", color = Color.Gray, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(10.dp))
                 
                 Button(
@@ -395,22 +498,10 @@ fun SettingsScreen(
             }
         }
 
-        // Configuración de Reproducción
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Persistencia de Datos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Las miniaturas y preferencias se guardan de forma nativa en tu dispositivo.", color = Color.Gray, fontSize = 12.sp)
-            }
-        }
-
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = "Mi Netflix Local v1.3 • Guardado Automático",
+            text = "Mi Netflix Local v1.4 • Guardado Permanente",
             color = Color.DarkGray,
             fontSize = 11.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -566,7 +657,7 @@ fun NetflixHeroBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(380.dp)
+            .height(360.dp)
     ) {
         Image(
             painter = painter,
@@ -665,7 +756,7 @@ fun CompactBottomNavigation(
             IconButton(onClick = { onTabSelected("grid") }) {
                 Icon(
                     imageVector = Icons.Default.List,
-                    contentDescription = "Cuadrícula",
+                    contentDescription = "Películas y Series",
                     tint = if (currentTab == "grid") Color(0xFFE50914) else Color.Gray
                 )
             }
@@ -764,11 +855,11 @@ fun loadLocalVideosGroupedByFolder(context: Context): Map<String, List<VideoFile
                 id
             )
 
-            // Cargar imagen personalizada guardada
+            // Cargar imagen personalizada si fue guardada localmente
             val savedImageUriString = loadCustomImage(context, id)
             var customImageUri: Uri? = savedImageUriString?.let { Uri.parse(it) }
 
-            // Si no tiene imagen personalizada guardada, buscar .jpg/.png adyacente
+            // Si no hay imagen guardada, intentar buscar .jpg/.png adyacente
             if (customImageUri == null && dataColumn != -1) {
                 val filePath = cursor.getString(dataColumn)
                 if (filePath != null) {
