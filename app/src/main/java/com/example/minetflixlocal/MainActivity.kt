@@ -770,17 +770,26 @@ fun CompactBottomNavigation(
 }
 
 @Composable
+@Composable
 fun VideoPlayerScreen(
     videoUri: Uri,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(videoUri))
-            prepare()
-            playWhenReady = true
-        }
+        // Habilitamos la decodificación por software para códecs como AC3, EAC3, DTS, etc.
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+            .setExtensionRendererMode(
+                androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+            )
+
+        ExoPlayer.Builder(context, renderersFactory)
+            .build()
+            .apply {
+                setMediaItem(MediaItem.fromUri(videoUri))
+                prepare()
+                playWhenReady = true
+            }
     }
 
     DisposableEffect(Unit) {
