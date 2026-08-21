@@ -800,17 +800,19 @@ fun VideoAppScreen(
     val recentVideos = remember(visibleVideos) { visibleVideos.sortedByDescending { it.dateAdded }.take(15) }
 
     if (selectedVideo != null) {
-        UnifiedVideoPlayerScreen(
-            video = selectedVideo!!,
-            allVideosInSeries = selectedVideoSeries,
-            startFromBeginning = playFromStart,
-            engine = playerEngine,
-            onBack = { selectedVideo = null; refreshTrigger++ },
-            onPlayNext = { next ->
-                selectedVideo = next
-                playFromStart = true
-            }
-        )
+        key(selectedVideo!!.id) {
+            UnifiedVideoPlayerScreen(
+                video = selectedVideo!!,
+                allVideosInSeries = selectedVideoSeries,
+                startFromBeginning = playFromStart,
+                engine = playerEngine,
+                onBack = { selectedVideo = null; refreshTrigger++ },
+                onPlayNext = { next ->
+                    selectedVideo = next
+                    playFromStart = true
+                }
+            )
+        }
     } else {
         if (hasPermission) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -1647,11 +1649,11 @@ fun VlcVideoPlayerView(
 
     var pfdRef by remember { mutableStateOf<android.os.ParcelFileDescriptor?>(null) }
 
-    val libVLC = remember {
+    val libVLC = remember(video.id) {
         LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames", "--network-caching=1500", "-vvv"))
     }
 
-    val mediaPlayer = remember {
+    val mediaPlayer = remember(video.id) {
         MediaPlayer(libVLC).apply {
             val media = try {
                 val pfd = context.contentResolver.openFileDescriptor(video.uri, "r")
@@ -1702,7 +1704,7 @@ fun VlcVideoPlayerView(
     }
 
     // Auto-ocultar spinner de carga tras 1.5s si el reproductor ya arrancó
-    LaunchedEffect(Unit) {
+    LaunchedEffect(video.id) {
         delay(1500)
         isLoading = false
     }
@@ -1727,17 +1729,21 @@ fun VlcVideoPlayerView(
         }
     }
 
+    // Cuenta regresiva automática de 10 segundos para el próximo capítulo
     LaunchedEffect(showNextEpisode) {
         if (showNextEpisode && nextVideo != null) {
             while (nextEpisodeCountdown > 0) {
                 delay(1000)
                 nextEpisodeCountdown--
             }
-            onPlayNext(nextVideo)
+            if (showNextEpisode) {
+                showNextEpisode = false
+                onPlayNext(nextVideo)
+            }
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(video.id) {
         onDispose {
             val pos = mediaPlayer.time
             val dur = mediaPlayer.length
@@ -1849,7 +1855,10 @@ fun VlcVideoPlayerView(
                 NextEpisodeCard(
                     nextVideo = nextVideo,
                     countdown = nextEpisodeCountdown,
-                    onPlay = { onPlayNext(nextVideo) },
+                    onPlay = {
+                        showNextEpisode = false
+                        onPlayNext(nextVideo)
+                    },
                     onDismiss = { showNextEpisode = false }
                 )
             }
@@ -1973,7 +1982,7 @@ fun ExoPlayerVideoPlayerView(
     var showNextEpisode by remember { mutableStateOf(false) }
     var nextEpisodeCountdown by remember { mutableStateOf(10) }
 
-    val exoPlayer = remember {
+    val exoPlayer = remember(video.id) {
         val rf = DefaultRenderersFactory(context).apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             setEnableAudioTrackPlaybackParams(true)
@@ -2010,11 +2019,14 @@ fun ExoPlayerVideoPlayerView(
     LaunchedEffect(showNextEpisode) {
         if (showNextEpisode && nextVideo != null) {
             while (nextEpisodeCountdown > 0) { delay(1000); nextEpisodeCountdown-- }
-            onPlayNext(nextVideo)
+            if (showNextEpisode) {
+                showNextEpisode = false
+                onPlayNext(nextVideo)
+            }
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(video.id) {
         onDispose {
             val pos = exoPlayer.currentPosition; val dur = exoPlayer.duration
             if (pos > 0) saveVideoProgress(context, video.id, pos, if (dur > 0) dur else video.durationMs)
