@@ -64,11 +64,18 @@ import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
 import kotlinx.coroutines.delay
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.Locale
 
+// ==========================================
+// 1. MODELO DE DATOS
+// ==========================================
 data class VideoFile(
     val id: Long,
     val uri: Uri,
@@ -82,6 +89,9 @@ data class VideoFile(
     val subtitleUri: Uri? = null
 )
 
+// ==========================================
+// 2. ACTIVIDAD PRINCIPAL
+// ==========================================
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +116,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// ==========================================
+// 3. UTILIDADES DE ALMACENAMIENTO Y PREFERENCIAS
+// ==========================================
 fun getPrefs(context: Context): SharedPreferences {
     return context.getSharedPreferences("app_netflix_data", Context.MODE_PRIVATE)
 }
@@ -128,6 +141,15 @@ fun saveUserName(context: Context, name: String) {
 
 fun loadUserName(context: Context): String {
     return getPrefs(context).getString("user_name", "Usuario") ?: "Usuario"
+}
+
+// Configuración del motor de reproducción (VLC vs ExoPlayer)
+fun savePlayerEngine(context: Context, engine: String) {
+    getPrefs(context).edit().putString("player_engine", engine).apply()
+}
+
+fun loadPlayerEngine(context: Context): String {
+    return getPrefs(context).getString("player_engine", "vlc") ?: "vlc"
 }
 
 fun saveVideoProgress(context: Context, videoId: Long, positionMs: Long, totalDurationMs: Long) {
@@ -208,6 +230,9 @@ fun formatFileSize(bytes: Long): String {
     }
 }
 
+// ==========================================
+// 4. PANTALLA PRINCIPAL
+// ==========================================
 @Composable
 fun VideoAppScreen() {
     val context = LocalContext.current
@@ -215,6 +240,7 @@ fun VideoAppScreen() {
     var allVideos by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
     var hiddenVideoIds by remember { mutableStateOf(loadHiddenVideos(context)) }
     var userName by remember { mutableStateOf(loadUserName(context)) }
+    var playerEngine by remember { mutableStateOf(loadPlayerEngine(context)) }
     var selectedVideo by remember { mutableStateOf<VideoFile?>(null) }
     var playFromStart by remember { mutableStateOf(false) }
     var currentTab by remember { mutableStateOf("home") }
@@ -305,9 +331,10 @@ fun VideoAppScreen() {
     }
 
     if (selectedVideo != null) {
-        VideoPlayerScreen(
+        UnifiedVideoPlayerScreen(
             video = selectedVideo!!,
             startFromBeginning = playFromStart,
+            engine = playerEngine,
             onBack = {
                 selectedVideo = null
                 refreshTrigger++
@@ -327,6 +354,11 @@ fun VideoAppScreen() {
                     onUserNameChange = { newName ->
                         userName = newName
                         saveUserName(context, newName)
+                    },
+                    playerEngine = playerEngine,
+                    onPlayerEngineChange = { newEngine ->
+                        playerEngine = newEngine
+                        savePlayerEngine(context, newEngine)
                     },
                     currentTab = currentTab,
                     onTabSelected = { currentTab = it },
@@ -404,6 +436,9 @@ fun VideoAppScreen() {
     }
 }
 
+// ==========================================
+// 5. LAYOUT PRINCIPAL NETFLIX
+// ==========================================
 @Composable
 fun NetflixMainLayout(
     groupedVideos: Map<String, List<VideoFile>>,
@@ -414,6 +449,8 @@ fun NetflixMainLayout(
     hiddenCount: Int,
     userName: String,
     onUserNameChange: (String) -> Unit,
+    playerEngine: String,
+    onPlayerEngineChange: (String) -> Unit,
     currentTab: String,
     onTabSelected: (String) -> Unit,
     searchQuery: String,
@@ -503,6 +540,8 @@ fun NetflixMainLayout(
                 SettingsScreen(
                     userName = userName,
                     onUserNameChange = onUserNameChange,
+                    playerEngine = playerEngine,
+                    onPlayerEngineChange = onPlayerEngineChange,
                     allVideosCount = totalAllVideosCount,
                     hiddenCount = hiddenCount,
                     onRestoreHidden = onRestoreHidden,
@@ -1074,10 +1113,15 @@ fun VideoDetailModal(
     )
 }
 
+// ==========================================
+// 8. PANTALLA DE AJUSTES (CON SELECTOR DE MOTOR)
+// ==========================================
 @Composable
 fun SettingsScreen(
     userName: String,
     onUserNameChange: (String) -> Unit,
+    playerEngine: String,
+    onPlayerEngineChange: (String) -> Unit,
     allVideosCount: Int,
     hiddenCount: Int,
     onRestoreHidden: () -> Unit,
@@ -1092,20 +1136,21 @@ fun SettingsScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = "Ajustes de Perfil",
+            text = "Ajustes de la Aplicación",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
+        // Card de Perfil
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Nombre de Usuario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Perfil de Usuario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
@@ -1114,7 +1159,7 @@ fun SettingsScreen(
                         textState = it
                         onUserNameChange(it)
                     },
-                    label = { Text("Nombre de Perfil", color = Color.Gray) },
+                    label = { Text("Nombre en pantalla", color = Color.Gray) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
@@ -1127,48 +1172,101 @@ fun SettingsScreen(
             }
         }
 
+        // Card de Motor de Reproducción
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Resumen del Catálogo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-                Text("• Total de videos detectados: $allVideosCount", color = Color.LightGray, fontSize = 13.sp)
-                Text("• Videos ocultos del catálogo: $hiddenCount", color = Color.LightGray, fontSize = 13.sp)
+                Text("Motor de Reproducción", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Elige el decodificador de video para reproducir tus archivos:",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
                 Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onRefreshVideos,
-                    border = BorderStroke(1.dp, Color(0xFF444444)),
-                    modifier = Modifier.fillMaxWidth()
+
+                // Opción 1: LibVLC
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (playerEngine == "vlc") Color(0xFF262626) else Color.Transparent)
+                        .clickable { onPlayerEngineChange("vlc") }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Volver a Escanear Almacenamiento", color = Color.White)
+                    RadioButton(
+                        selected = (playerEngine == "vlc"),
+                        onClick = { onPlayerEngineChange("vlc") },
+                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFE50914), unselectedColor = Color.Gray)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text("LibVLC (Recomendado)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Compatible con MKV, Dolby AC3, DTS y subtítulos avanzados.", color = Color.LightGray, fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Opción 2: ExoPlayer
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (playerEngine == "exoplayer") Color(0xFF262626) else Color.Transparent)
+                        .clickable { onPlayerEngineChange("exoplayer") }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (playerEngine == "exoplayer"),
+                        onClick = { onPlayerEngineChange("exoplayer") },
+                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFE50914), unselectedColor = Color.Gray)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text("Google ExoPlayer / Media3", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Motor nativo de Android para videos estándar MP4/WebM.", color = Color.LightGray, fontSize = 11.sp)
+                    }
                 }
             }
         }
 
+        // Card de Almacenamiento
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Gestión de Contenido", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Restaura todos los videos ocultados previamente.", color = Color.Gray, fontSize = 12.sp)
+                Text("Almacenamiento y Biblioteca", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("• Total de videos detectados: $allVideosCount", color = Color.LightGray, fontSize = 13.sp)
+                Text("• Videos ocultos del catálogo: $hiddenCount", color = Color.LightGray, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onRefreshVideos,
+                        border = BorderStroke(1.dp, Color(0xFF444444)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reescanear", color = Color.White, fontSize = 12.sp)
+                    }
 
-                Button(
-                    onClick = onRestoreHidden,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
-                    enabled = hiddenCount > 0,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Restore, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Restablecer Videos Ocultos ($hiddenCount)", color = Color.White)
+                    Button(
+                        onClick = onRestoreHidden,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
+                        enabled = hiddenCount > 0,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Restablecer ($hiddenCount)", color = Color.White, fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -1176,7 +1274,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = "Mi Netflix Local v2.0 • Audio MKV & ExoPlayer",
+            text = "Mi Netflix Local v2.5 • Dual Engine (LibVLC + ExoPlayer)",
             color = Color.DarkGray,
             fontSize = 11.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -1184,6 +1282,9 @@ fun SettingsScreen(
     }
 }
 
+// ==========================================
+// 9. NAVEGACIÓN INFERIOR COMPACTA
+// ==========================================
 @Composable
 fun CompactBottomNavigation(
     currentTab: String,
@@ -1227,9 +1328,273 @@ fun CompactBottomNavigation(
     }
 }
 
+// ==========================================
+// 10. REPRODUCTOR UNIFICADO (VLC O EXOPLAYER)
+// ==========================================
+@Composable
+fun UnifiedVideoPlayerScreen(
+    video: VideoFile,
+    startFromBeginning: Boolean,
+    engine: String,
+    onBack: () -> Unit
+) {
+    if (engine == "vlc") {
+        VlcVideoPlayerView(
+            video = video,
+            startFromBeginning = startFromBeginning,
+            onBack = onBack
+        )
+    } else {
+        ExoPlayerVideoPlayerView(
+            video = video,
+            startFromBeginning = startFromBeginning,
+            onBack = onBack
+        )
+    }
+}
+
+// ------------------------------------------
+// 10.1 MOTOR LIBVLC (VLC PLAYER OFICIAL)
+// ------------------------------------------
+@Composable
+fun VlcVideoPlayerView(
+    video: VideoFile,
+    startFromBeginning: Boolean,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var currentSpeed by remember { mutableStateOf(1.0f) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    var isFillAspect by remember { mutableStateOf(false) }
+    var seekNotice by remember { mutableStateOf<String?>(null) }
+
+    val libVLC = remember {
+        val options = ArrayList<String>().apply {
+            add("--no-drop-late-frames")
+            add("--no-skip-frames")
+            add("-vvv")
+        }
+        LibVLC(context, options)
+    }
+
+    val mediaPlayer = remember {
+        MediaPlayer(libVLC).apply {
+            val media = Media(libVLC, video.uri).apply {
+                setHWDecoderEnabled(true, false)
+            }
+            this.media = media
+            media.release()
+
+            // Subtítulos si existen
+            video.subtitleUri?.let { subUri ->
+                addSlave(Media.Slave.Type.Subtitle, subUri, true)
+            }
+
+            play()
+
+            if (!startFromBeginning) {
+                val savedPos = getVideoProgress(context, video.id)
+                if (savedPos > 0) {
+                    time = savedPos
+                }
+            }
+        }
+    }
+
+    // Guardado continuo de progreso cada 3 segundos
+    LaunchedEffect(mediaPlayer) {
+        while (true) {
+            delay(3000)
+            if (mediaPlayer.isPlaying) {
+                val currentPos = mediaPlayer.time
+                val totalDur = mediaPlayer.length
+                if (currentPos > 0 && totalDur > 0) {
+                    saveVideoProgress(context, video.id, currentPos, totalDur)
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            val currentPos = mediaPlayer.time
+            val totalDur = mediaPlayer.length
+            if (currentPos > 0) {
+                saveVideoProgress(context, video.id, currentPos, if (totalDur > 0) totalDur else video.durationMs)
+            }
+            mediaPlayer.stop()
+            mediaPlayer.detachViews()
+            mediaPlayer.release()
+            libVLC.release()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                VLCVideoLayout(ctx).apply {
+                    mediaPlayer.attachViews(this, null, false, false)
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val screenWidth = size.width
+                            if (offset.x < screenWidth / 2) {
+                                val newPos = (mediaPlayer.time - 10000).coerceAtLeast(0)
+                                mediaPlayer.time = newPos
+                                seekNotice = "⏪ -10s"
+                            } else {
+                                val newPos = (mediaPlayer.time + 10000).coerceAtMost(mediaPlayer.length)
+                                mediaPlayer.time = newPos
+                                seekNotice = "⏩ +10s"
+                            }
+                        }
+                    )
+                }
+        )
+
+        LaunchedEffect(seekNotice) {
+            if (seekNotice != null) {
+                delay(800)
+                seekNotice = null
+            }
+        }
+
+        AnimatedVisibility(
+            visible = seekNotice != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(12.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = seekNotice ?: "",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Barra Superior
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .align(Alignment.TopCenter),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+            }
+
+            Text(
+                text = video.name,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Toggle Aspecto
+                IconButton(
+                    onClick = {
+                        isFillAspect = !isFillAspect
+                        mediaPlayer.aspectRatio = if (isFillAspect) "16:9" else null
+                    },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                ) {
+                    Icon(Icons.Default.AspectRatio, contentDescription = "Aspecto", tint = if (isFillAspect) Color(0xFFE50914) else Color.White)
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Selector Velocidad
+                Box {
+                    IconButton(
+                        onClick = { showSpeedMenu = true },
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                    ) {
+                        Text(
+                            text = "${currentSpeed}x",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showSpeedMenu,
+                        onDismissRequest = { showSpeedMenu = false },
+                        modifier = Modifier.background(Color(0xFF1E1E1E))
+                    ) {
+                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "${speed}x",
+                                        color = if (currentSpeed == speed) Color(0xFFE50914) else Color.White,
+                                        fontWeight = if (currentSpeed == speed) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    currentSpeed = speed
+                                    mediaPlayer.rate = speed
+                                    showSpeedMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Botón reproductor externo
+        Button(
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(video.uri, "video/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Abrir con reproductor externo"))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xCC222222)),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("VLC / Externo", color = Color.White, fontSize = 12.sp)
+        }
+    }
+}
+
+// ------------------------------------------
+// 10.2 MOTOR EXOPLAYER (MEDIA3)
+// ------------------------------------------
 @OptIn(UnstableApi::class)
 @Composable
-fun VideoPlayerScreen(
+fun ExoPlayerVideoPlayerView(
     video: VideoFile,
     startFromBeginning: Boolean,
     onBack: () -> Unit
@@ -1370,14 +1735,9 @@ fun VideoPlayerScreen(
         ) {
             IconButton(
                 onClick = onBack,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = Color.White
-                )
+                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
             }
 
             Text(
@@ -1387,9 +1747,7 @@ fun VideoPlayerScreen(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1401,14 +1759,9 @@ fun VideoPlayerScreen(
                             else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                         }
                     },
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AspectRatio,
-                        contentDescription = "Aspecto",
-                        tint = Color.White
-                    )
+                    Icon(Icons.Default.AspectRatio, contentDescription = "Aspecto", tint = Color.White)
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -1416,8 +1769,7 @@ fun VideoPlayerScreen(
                 Box {
                     IconButton(
                         onClick = { showSpeedMenu = true },
-                        modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), shape = CircleShape)
                     ) {
                         Text(
                             text = "${currentSpeed}x",
@@ -1469,11 +1821,14 @@ fun VideoPlayerScreen(
         ) {
             Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Reproductor externo", color = Color.White, fontSize = 12.sp)
+            Text("VLC / Externo", color = Color.White, fontSize = 12.sp)
         }
     }
 }
 
+// ==========================================
+// 11. ESCANEO LOCAL DE VIDEOS Y METADATOS
+// ==========================================
 fun loadAllLocalVideos(context: Context): List<VideoFile> {
     val videos = mutableListOf<VideoFile>()
     val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
