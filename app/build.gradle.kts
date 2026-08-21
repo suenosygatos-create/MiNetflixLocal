@@ -56,7 +56,10 @@ dependencies {
     // Material Icons Extended
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Google Media3 ExoPlayer con extractores para MKV y soporte multiformato
+    // LibVLC (Motor nativo de VLC con soporte para AC3, EAC3, DTS y todos los formatos MKV)
+    implementation("org.videolan.android:libvlc-all:3.5.1")
+
+    // Google Media3 ExoPlayer con extractores
     val media3Version = "1.2.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
