@@ -67,6 +67,7 @@ import kotlinx.coroutines.delay
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 import java.io.FileOutputStream
@@ -1387,7 +1388,7 @@ fun VlcVideoPlayerView(
 
             // Subtítulos si existen
             video.subtitleUri?.let { subUri ->
-                addSlave(Media.Slave.Type.Subtitle, subUri, true)
+                addSlave(IMedia.Slave.Type.Subtitle, subUri, true)
             }
 
             play()
