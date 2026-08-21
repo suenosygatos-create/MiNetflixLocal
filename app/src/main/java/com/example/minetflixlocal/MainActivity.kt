@@ -1645,16 +1645,42 @@ fun VlcVideoPlayerView(
     var showNextEpisode by remember { mutableStateOf(false) }
     var nextEpisodeCountdown by remember { mutableStateOf(10) }
 
+    var pfdRef by remember { mutableStateOf<android.os.ParcelFileDescriptor?>(null) }
+
     val libVLC = remember {
         LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames", "--network-caching=1500", "-vvv"))
     }
 
     val mediaPlayer = remember {
         MediaPlayer(libVLC).apply {
-            val media = Media(libVLC, video.uri).apply {
-                setHWDecoderEnabled(true, false)
-                addOption(":file-caching=1500")
-                addOption(":network-caching=1500")
+            val media = try {
+                val pfd = context.contentResolver.openFileDescriptor(video.uri, "r")
+                pfdRef = pfd
+                if (pfd != null) {
+                    Media(libVLC, pfd.fileDescriptor).apply {
+                        setHWDecoderEnabled(true, false)
+                        addOption(":file-caching=1500")
+                        addOption(":network-caching=1500")
+                    }
+                } else if (!video.filePath.isNullOrEmpty() && File(video.filePath).exists()) {
+                    Media(libVLC, video.filePath).apply {
+                        setHWDecoderEnabled(true, false)
+                        addOption(":file-caching=1500")
+                        addOption(":network-caching=1500")
+                    }
+                } else {
+                    Media(libVLC, video.uri).apply {
+                        setHWDecoderEnabled(true, false)
+                        addOption(":file-caching=1500")
+                        addOption(":network-caching=1500")
+                    }
+                }
+            } catch (e: Exception) {
+                if (!video.filePath.isNullOrEmpty() && File(video.filePath).exists()) {
+                    Media(libVLC, video.filePath).apply { setHWDecoderEnabled(true, false) }
+                } else {
+                    Media(libVLC, video.uri).apply { setHWDecoderEnabled(true, false) }
+                }
             }
             this.media = media
             media.release()
@@ -1665,12 +1691,20 @@ fun VlcVideoPlayerView(
     DisposableEffect(mediaPlayer) {
         val listener = MediaPlayer.EventListener { event ->
             when (event.type) {
-                MediaPlayer.Event.Playing -> isLoading = false
-                MediaPlayer.Event.Buffering -> if (event.buffering == 100f) isLoading = false
+                MediaPlayer.Event.Playing,
+                MediaPlayer.Event.Vout,
+                MediaPlayer.Event.TimeChanged -> isLoading = false
+                MediaPlayer.Event.Buffering -> if (event.buffering >= 50f) isLoading = false
             }
         }
         mediaPlayer.setEventListener(listener)
         onDispose { mediaPlayer.setEventListener(null) }
+    }
+
+    // Auto-ocultar spinner de carga tras 1.5s si el reproductor ya arrancó
+    LaunchedEffect(Unit) {
+        delay(1500)
+        isLoading = false
     }
 
     LaunchedEffect(mediaPlayer) {
@@ -1679,11 +1713,14 @@ fun VlcVideoPlayerView(
             if (mediaPlayer.isPlaying) {
                 val pos = mediaPlayer.time
                 val dur = mediaPlayer.length
-                if (pos > 0 && dur > 0) {
-                    saveVideoProgress(context, video.id, pos, dur)
-                    if (nextVideo != null && !showNextEpisode && pos.toFloat() / dur >= 0.95f) {
-                        showNextEpisode = true
-                        nextEpisodeCountdown = 10
+                if (pos > 0) {
+                    isLoading = false
+                    if (dur > 0) {
+                        saveVideoProgress(context, video.id, pos, dur)
+                        if (nextVideo != null && !showNextEpisode && pos.toFloat() / dur >= 0.95f) {
+                            showNextEpisode = true
+                            nextEpisodeCountdown = 10
+                        }
                     }
                 }
             }
@@ -1705,25 +1742,32 @@ fun VlcVideoPlayerView(
             val pos = mediaPlayer.time
             val dur = mediaPlayer.length
             if (pos > 0) saveVideoProgress(context, video.id, pos, if (dur > 0) dur else video.durationMs)
-            mediaPlayer.stop()
-            mediaPlayer.detachViews()
-            mediaPlayer.release()
-            libVLC.release()
+            try { mediaPlayer.stop() } catch (e: Exception) {}
+            try { mediaPlayer.detachViews() } catch (e: Exception) {}
+            try { mediaPlayer.release() } catch (e: Exception) {}
+            try { libVLC.release() } catch (e: Exception) {}
+            try { pfdRef?.close() } catch (e: Exception) {}
         }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
 
         AndroidView(
-            factory = { VLCVideoLayout(it) },
-            update = { vlcLayout ->
-                if (!mediaPlayer.vlcVout.areViewsAttached()) {
-                    mediaPlayer.attachViews(vlcLayout, null, false, false)
+            factory = { ctx ->
+                VLCVideoLayout(ctx).also { layout ->
+                    mediaPlayer.attachViews(layout, null, false, false)
                     mediaPlayer.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
                     if (!startFromBeginning) {
                         val savedPos = getVideoProgress(context, video.id)
                         if (savedPos > 0) mediaPlayer.time = savedPos
                     }
+                    mediaPlayer.play()
+                }
+            },
+            update = { vlcLayout ->
+                if (!mediaPlayer.vlcVout.areViewsAttached()) {
+                    mediaPlayer.attachViews(vlcLayout, null, false, false)
+                    mediaPlayer.videoScale = if (isFillAspect) MediaPlayer.ScaleType.SURFACE_FILL else MediaPlayer.ScaleType.SURFACE_BEST_FIT
                     mediaPlayer.play()
                 }
             },
@@ -2083,8 +2127,8 @@ fun loadAllLocalVideos(context: Context): List<VideoFile> {
                         }
                     }
                 }
-
-                videos.add(VideoFile(id, contentUri, rawName.substringBeforeLast("."), folder, duration, size, dateAdded, null, customImageUri, subtitleUri))
+                val realFilePath = if (dataCol != -1) cursor.getString(dataCol) else null
+                videos.add(VideoFile(id, contentUri, rawName.substringBeforeLast("."), folder, duration, size, dateAdded, realFilePath, customImageUri, subtitleUri))
             }
         }
     } catch (e: Exception) { e.printStackTrace() }
