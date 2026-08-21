@@ -1283,7 +1283,8 @@ fun GridCatalogScreen(
 ) {
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         OutlinedTextField(
-            value = searchQuery, onSearchQueryChange = onSearchQueryChange,
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
             placeholder = { Text("Buscar en el catálogo...", color = Color.Gray, fontSize = 14.sp) },
             singleLine = true,
             leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
