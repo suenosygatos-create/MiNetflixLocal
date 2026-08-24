@@ -1,6 +1,8 @@
 package com.example.minetflixlocal.ui
 
+import android.app.Activity
 import android.net.Uri
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,7 +13,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,6 +25,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
@@ -33,10 +38,21 @@ fun VideoPlayerScreen(
     title: String = "Video",
     engine: String = "EXOPLAYER",
     nextEpisodeTitle: String? = null,
+    nextEpisodePosterUri: Uri? = null,
     onNextEpisode: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     var showNextOverlay by remember { mutableStateOf(false) }
+
+    // Evita que la pantalla se apague mientras se reproduce el video
+    DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (engine == "VLC") {
@@ -59,10 +75,11 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Ventana superpuesta de Próximo Episodio
+        // Ventana estilo Netflix con Miniatura
         if (showNextOverlay && onNextEpisode != null) {
             NextEpisodeOverlay(
                 nextTitle = nextEpisodeTitle ?: "Siguiente episodio",
+                posterUri = nextEpisodePosterUri,
                 onPlayNow = onNextEpisode,
                 onCancel = onBack
             )
@@ -73,6 +90,7 @@ fun VideoPlayerScreen(
 @Composable
 fun NextEpisodeOverlay(
     nextTitle: String,
+    posterUri: Uri?,
     onPlayNow: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -98,21 +116,55 @@ fun NextEpisodeOverlay(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .padding(24.dp)
-                .widthIn(max = 400.dp)
+                .width(360.dp)
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "El próximo episodio empieza en $secondsLeft s",
                     color = Color.Gray,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = nextTitle,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 100.dp, height = 60.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF333333))
+                    ) {
+                        if (posterUri != null) {
+                            AsyncImage(
+                                model = posterUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = nextTitle,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
