@@ -27,10 +27,12 @@ class MainActivity : ComponentActivity() {
     private var activeProfile by mutableStateOf<UserProfile?>(null)
     private var playerEngine by mutableStateOf("EXOPLAYER")
 
-    private val defaultProfiles = listOf(
-        UserProfile("1", "Usuario 1", 0xFFE50914),
-        UserProfile("2", "Familia", 0xFF1E88E5),
-        UserProfile("3", "Niños", 0xFF43A047)
+    private var profilesState by mutableStateOf(
+        listOf(
+            UserProfile("1", "Usuario 1", "🐭", 0xFFE50914),
+            UserProfile("2", "Familia", "🏰", 0xFF1E88E5),
+            UserProfile("3", "Niños", "🦁", 0xFF43A047)
+        )
     )
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -66,10 +68,18 @@ class MainActivity : ComponentActivity() {
             when (currentScreen) {
                 ScreenState.PROFILES -> {
                     ProfileScreen(
-                        profiles = defaultProfiles,
+                        profiles = profilesState,
                         onProfileSelected = { profile ->
                             activeProfile = profile
                             currentScreen = ScreenState.HOME
+                        },
+                        onProfileUpdated = { updatedProfile ->
+                            profilesState = profilesState.map {
+                                if (it.id == updatedProfile.id) updatedProfile else it
+                            }
+                            if (activeProfile?.id == updatedProfile.id) {
+                                activeProfile = updatedProfile
+                            }
                         }
                     )
                 }
