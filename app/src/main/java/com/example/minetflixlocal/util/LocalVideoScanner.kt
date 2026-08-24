@@ -2,6 +2,7 @@ package com.example.minetflixlocal.util
 
 import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
 import android.provider.MediaStore
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.Season
@@ -12,6 +13,7 @@ object LocalVideoScanner {
 
     fun scanLocalVideos(context: Context): Pair<List<MediaSeries>, List<MediaSeries>> {
         val seriesMap = mutableMapOf<String, MutableMap<String, MutableList<VideoItem>>>()
+        val seriesFolderMap = mutableMapOf<String, File>()
         val moviesList = mutableListOf<MediaSeries>()
 
         val projection = arrayOf(
@@ -52,23 +54,29 @@ object LocalVideoScanner {
                     val seriesName = grandParentFolder.name
                     val seasonName = parentFolder.name
 
-                    val videoItem = VideoItem(id.toString(), name, uri.toString(), durationMin)
+                    seriesFolderMap[seriesName] = grandParentFolder
+
+                    val videoItem = VideoItem(id.toString(), name, uri.toString(), durationMin, uri)
                     seriesMap.getOrPut(seriesName) { mutableMapOf() }
                         .getOrPut(seasonName) { mutableListOf() }
                         .add(videoItem)
                 } else if (parentFolder != null) {
                     val seriesName = parentFolder.name
-                    val videoItem = VideoItem(id.toString(), name, uri.toString(), durationMin)
+                    seriesFolderMap[seriesName] = parentFolder
+
+                    val videoItem = VideoItem(id.toString(), name, uri.toString(), durationMin, uri)
                     seriesMap.getOrPut(seriesName) { mutableMapOf() }
                         .getOrPut("Temporada 1") { mutableListOf() }
                         .add(videoItem)
                 } else {
+                    val posterUri = findFolderCover(file.parentFile, uri)
                     moviesList.add(
                         MediaSeries(
                             id = id.toString(),
                             title = name,
+                            posterUri = posterUri,
                             isMovie = true,
-                            movieVideo = VideoItem(id.toString(), name, uri.toString(), durationMin)
+                            movieVideo = VideoItem(id.toString(), name, uri.toString(), durationMin, uri)
                         )
                     )
                 }
@@ -76,6 +84,10 @@ object LocalVideoScanner {
         }
 
         val seriesList = seriesMap.map { (seriesTitle, seasonsMap) ->
+            val folder = seriesFolderMap[seriesTitle]
+            val firstVideoUri = seasonsMap.values.firstOrNull()?.firstOrNull()?.thumbnailUri
+            val posterUri = findFolderCover(folder, firstVideoUri)
+
             val seasons = seasonsMap.entries.toList().mapIndexed { index, entry ->
                 Season(
                     seasonNumber = index + 1,
@@ -86,11 +98,24 @@ object LocalVideoScanner {
             MediaSeries(
                 id = seriesTitle,
                 title = seriesTitle,
+                posterUri = posterUri,
                 isMovie = false,
                 seasons = seasons
             )
         }
 
         return Pair(seriesList, moviesList)
+    }
+
+    private fun findFolderCover(folder: File?, fallbackUri: Uri?): Uri? {
+        if (folder == null || !folder.exists()) return fallbackUri
+        val coverNames = listOf("poster.jpg", "poster.png", "cover.jpg", "cover.png", "folder.jpg", "folder.png")
+        for (name in coverNames) {
+            val coverFile = File(folder, name)
+            if (coverFile.exists()) {
+                return Uri.fromFile(coverFile)
+            }
+        }
+        return fallbackUri
     }
 }
