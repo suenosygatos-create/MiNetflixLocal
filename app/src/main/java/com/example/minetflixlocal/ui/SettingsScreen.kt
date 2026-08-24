@@ -1,21 +1,21 @@
 package com.example.minetflixlocal.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    selectedEngine: String,
+    onEngineChanged: (String) -> Unit,
     onBack: () -> Unit,
     onChangeProfile: () -> Unit,
     onRescan: () -> Unit
@@ -23,7 +23,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ajustes y Configuración", color = Color.White) },
+                title = { Text("Ajustes", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
@@ -39,30 +39,58 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Text("General", color = Color(0xFFE50914), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            
+            Text(text = "Motor de Reproducción", color = Color.Gray, style = MaterialTheme.typography.titleMedium)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEngineChanged("EXOPLAYER") },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = selectedEngine == "EXOPLAYER",
+                    onClick = { onEngineChanged("EXOPLAYER") }
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Google ExoPlayer", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                    Text("Recomendado (Rápido y nativo de Android)", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEngineChanged("VLC") },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = selectedEngine == "VLC",
+                    onClick = { onEngineChanged("VLC") }
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("VLC Media Player", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                    Text("Para archivos con audio AC3 / DTS o contenedores MKV", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Divider(color = Color.DarkGray)
+
             Button(
                 onClick = onRescan,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Re-escanear videos locales", color = Color.White)
+                Text("Reescanear Archivos Locales")
             }
 
-            Button(
+            OutlinedButton(
                 onClick = onChangeProfile,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222))
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Cambiar de Usuario / Perfil", color = Color.White)
+                Text("Cambiar de Perfil", color = Color.White)
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("Información de la App", color = Color(0xFFE50914), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text("Versión: 1.0.0 Local", color = Color.Gray, fontSize = 14.sp)
-            Text("Formatos soportados: MKV, MP4, AVI, WEBM, TS, M4V, FLV", color = Color.Gray, fontSize = 14.sp)
         }
     }
 }
