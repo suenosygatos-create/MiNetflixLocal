@@ -268,41 +268,52 @@ fun MediaSectionRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { media ->
-                Card(
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
+                Column(
                     modifier = Modifier
                         .width(120.dp)
-                        .height(170.dp)
                         .clickable { onMediaSelected(media) }
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (media.posterUri != null) {
-                            AsyncImage(
-                                model = media.posterUri,
-                                contentDescription = media.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color(0xFF333333)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = media.title,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(8.dp)
+                    Card(
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (media.posterUri != null) {
+                                AsyncImage(
+                                    model = media.posterUri,
+                                    contentDescription = media.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
                                 )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFF333333)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = media.title,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
