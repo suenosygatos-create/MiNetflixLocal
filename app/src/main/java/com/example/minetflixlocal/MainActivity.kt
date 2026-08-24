@@ -15,6 +15,7 @@ import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.util.LocalVideoScanner
+import com.example.minetflixlocal.util.ProfileManager
 
 enum class ScreenState {
     PROFILES, HOME, DETAIL, PLAYER, SETTINGS
@@ -26,14 +27,7 @@ class MainActivity : ComponentActivity() {
     private var moviesList by mutableStateOf<List<MediaSeries>>(emptyList())
     private var activeProfile by mutableStateOf<UserProfile?>(null)
     private var playerEngine by mutableStateOf("EXOPLAYER")
-
-    private var profilesState by mutableStateOf(
-        listOf(
-            UserProfile("1", "Usuario 1", "🐭", 0xFFE50914),
-            UserProfile("2", "Familia", "🏰", 0xFF1E88E5),
-            UserProfile("3", "Niños", "🦁", 0xFF43A047)
-        )
-    )
+    private var profilesState by mutableStateOf<List<UserProfile>>(emptyList())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -47,6 +41,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        profilesState = ProfileManager.loadProfiles(this)
         checkAndRequestPermissions()
 
         setContent {
@@ -74,9 +69,11 @@ class MainActivity : ComponentActivity() {
                             currentScreen = ScreenState.HOME
                         },
                         onProfileUpdated = { updatedProfile ->
-                            profilesState = profilesState.map {
+                            val updatedList = profilesState.map {
                                 if (it.id == updatedProfile.id) updatedProfile else it
                             }
+                            profilesState = updatedList
+                            ProfileManager.saveProfiles(this@MainActivity, updatedList)
                             if (activeProfile?.id == updatedProfile.id) {
                                 activeProfile = updatedProfile
                             }
@@ -124,16 +121,19 @@ class MainActivity : ComponentActivity() {
                     val nextEpisode = currentEpisodeList.getOrNull(currentEpisodeIndex + 1)
 
                     if (currentEpisode != null) {
-                        VideoPlayerScreen(
-                            videoUriString = currentEpisode.videoPath,
-                            title = currentEpisode.title,
-                            engine = playerEngine,
-                            nextEpisodeTitle = nextEpisode?.title,
-                            onNextEpisode = if (nextEpisode != null) {
-                                { currentEpisodeIndex++ }
-                            } else null,
-                            onBack = { currentScreen = ScreenState.DETAIL }
-                        )
+                        key(currentEpisode.videoPath) {
+                            VideoPlayerScreen(
+                                videoUriString = currentEpisode.videoPath,
+                                title = currentEpisode.title,
+                                engine = playerEngine,
+                                nextEpisodeTitle = nextEpisode?.title,
+                                nextEpisodePosterUri = selectedMedia?.posterUri,
+                                onNextEpisode = if (nextEpisode != null) {
+                                    { currentEpisodeIndex++ }
+                                } else null,
+                                onBack = { currentScreen = ScreenState.DETAIL }
+                            )
+                        }
                     }
                 }
 
