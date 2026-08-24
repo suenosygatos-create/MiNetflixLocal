@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
-import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme
+import com.example.minetflixlocal.ui.theme.*
 import com.example.minetflixlocal.util.WatchProgress
 import com.example.minetflixlocal.util.WatchProgressManager
 
@@ -45,14 +45,14 @@ fun MainApp() {
 
     var currentScreen by remember { mutableStateOf(Screen.PROFILE_SELECTION) }
     var activeProfile by remember { mutableStateOf<UserProfile?>(null) }
-    
+    var selectedEngine by remember { mutableStateOf("EXOPLAYER") }
+
     var seriesList by remember { mutableStateOf<List<MediaSeries>>(emptyList()) }
     var moviesList by remember { mutableStateOf<List<MediaSeries>>(emptyList()) }
     var currentProfileProgress by remember { mutableStateOf<Map<String, WatchProgress>>(emptyMap()) }
 
     var selectedMediaForDetail by remember { mutableStateOf<MediaSeries?>(null) }
 
-    // Recarga los datos de seguimiento del perfil activo de forma independiente
     LaunchedEffect(activeProfile?.id) {
         activeProfile?.let { profile ->
             currentProfileProgress = progressManager.getProgressForProfile(profile.id)
@@ -79,7 +79,7 @@ fun MainApp() {
                     selectedMediaForDetail = media
                 },
                 onResumePlayback = { media, episodeId ->
-                    // Lógica para reanudar la reproducción
+                    // Lógica para reanudar reproducción
                 },
                 onOpenSettings = {
                     currentScreen = Screen.SETTINGS
@@ -89,6 +89,9 @@ fun MainApp() {
 
         Screen.SETTINGS -> {
             SettingsScreen(
+                selectedEngine = selectedEngine,
+                onEngineChanged = { engine -> selectedEngine = engine },
+                onRescan = { /* Lógica de rescan */ },
                 onBack = { currentScreen = Screen.HOME },
                 onChangeProfile = {
                     activeProfile = null
