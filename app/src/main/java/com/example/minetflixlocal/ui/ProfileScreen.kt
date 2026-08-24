@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +33,7 @@ fun ProfileScreen(
         Text(
             text = "¿Quién está viendo?",
             color = Color.White,
-            fontSize = 26.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 32.dp)
         )
@@ -42,17 +42,17 @@ fun ProfileScreen(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             items(profiles) { profile ->
-                ProfileCard(profile = profile, onClick = { onProfileSelected(profile) })
+                ProfileItem(profile = profile, onClick = { onProfileSelected(profile) })
             }
         }
     }
 }
 
 @Composable
-fun ProfileCard(profile: UserProfile, onClick: () -> Unit) {
+fun ProfileItem(profile: UserProfile, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
@@ -60,14 +60,14 @@ fun ProfileCard(profile: UserProfile, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(profile.avatarColorHex)),
+                .clip(CircleShape)
+                .background(Color(profile.colorHex)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = profile.name.take(1).uppercase(),
                 color = Color.White,
-                fontSize = 40.sp,
+                fontSize = 36.sp,
                 fontWeight = FontWeight.Bold
             )
         }
