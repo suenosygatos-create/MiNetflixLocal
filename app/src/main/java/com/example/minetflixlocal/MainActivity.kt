@@ -15,7 +15,9 @@ import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.util.LocalVideoScanner
+import com.example.minetflixlocal.util.PlaybackManager
 import com.example.minetflixlocal.util.ProfileManager
+import com.example.minetflixlocal.util.WatchProgress
 
 enum class ScreenState {
     PROFILES, HOME, DETAIL, PLAYER, SETTINGS
@@ -28,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private var activeProfile by mutableStateOf<UserProfile?>(null)
     private var playerEngine by mutableStateOf("EXOPLAYER")
     private var profilesState by mutableStateOf<List<UserProfile>>(emptyList())
+    private var continueWatchingMap by mutableStateOf<Map<String, WatchProgress>>(emptyMap())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         profilesState = ProfileManager.loadProfiles(this)
+        continueWatchingMap = PlaybackManager.getAllProgress(this)
         checkAndRequestPermissions()
 
         setContent {
@@ -74,9 +78,6 @@ class MainActivity : ComponentActivity() {
                             }
                             profilesState = updatedList
                             ProfileManager.saveProfiles(this@MainActivity, updatedList)
-                            if (activeProfile?.id == updatedProfile.id) {
-                                activeProfile = updatedProfile
-                            }
                         }
                     )
                 }
@@ -86,9 +87,18 @@ class MainActivity : ComponentActivity() {
                         activeProfile = activeProfile,
                         seriesList = seriesList,
                         moviesList = moviesList,
+                        continueWatchingMap = continueWatchingMap,
                         onMediaSelected = { media ->
                             selectedMedia = media
                             currentScreen = ScreenState.DETAIL
+                        },
+                        onResumePlayback = { media, episodeId ->
+                            selectedMedia = media
+                            val allEpisodes = media.seasons.flatMap { it.episodes }
+                            val idx = allEpisodes.indexOfFirst { it.id == episodeId }
+                            currentEpisodeList = allEpisodes
+                            currentEpisodeIndex = if (idx >= 0) idx else 0
+                            currentScreen = ScreenState.PLAYER
                         },
                         onOpenSettings = {
                             currentScreen = ScreenState.SETTINGS
@@ -108,9 +118,10 @@ class MainActivity : ComponentActivity() {
                                 currentEpisodeIndex = if (index >= 0) index else 0
                                 currentScreen = ScreenState.PLAYER
                             },
-                            onUpdatePoster = { newUri ->
-                                updateMediaPoster(media.id, newUri)
-                                selectedMedia = selectedMedia?.copy(posterUri = newUri)
+                            onHideMedia = {
+                                PlaybackManager.hideMedia(this@MainActivity, media.id)
+                                loadLocalVideos()
+                                currentScreen = ScreenState.HOME
                             }
                         )
                     }
@@ -119,15 +130,28 @@ class MainActivity : ComponentActivity() {
                 ScreenState.PLAYER -> {
                     val currentEpisode = currentEpisodeList.getOrNull(currentEpisodeIndex)
                     val nextEpisode = currentEpisodeList.getOrNull(currentEpisodeIndex + 1)
+                    val mediaId = selectedMedia?.id ?: ""
 
                     if (currentEpisode != null) {
                         key(currentEpisode.videoPath) {
+                            val initialPos = PlaybackManager.getProgress(this, currentEpisode.id)
                             VideoPlayerScreen(
                                 videoUriString = currentEpisode.videoPath,
                                 title = currentEpisode.title,
                                 engine = playerEngine,
+                                startPositionMs = initialPos,
                                 nextEpisodeTitle = nextEpisode?.title,
                                 nextEpisodePosterUri = selectedMedia?.posterUri,
+                                onProgressUpdate = { pos, total ->
+                                    PlaybackManager.saveProgress(
+                                        context = this@MainActivity,
+                                        mediaId = mediaId,
+                                        episodeId = currentEpisode.id,
+                                        positionMs = pos,
+                                        totalDurationMs = total
+                                    )
+                                    continueWatchingMap = PlaybackManager.getAllProgress(this@MainActivity)
+                                },
                                 onNextEpisode = if (nextEpisode != null) {
                                     { currentEpisodeIndex++ }
                                 } else null,
@@ -153,11 +177,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun updateMediaPoster(mediaId: String, newUri: Uri) {
-        seriesList = seriesList.map { if (it.id == mediaId) it.copy(posterUri = newUri) else it }
-        moviesList = moviesList.map { if (it.id == mediaId) it.copy(posterUri = newUri) else it }
-    }
-
     private fun checkAndRequestPermissions() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_VIDEO
@@ -168,8 +187,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadLocalVideos() {
+        val hiddenIds = PlaybackManager.getHiddenMedia(this)
         val (series, movies) = LocalVideoScanner.scanLocalVideos(this)
-        seriesList = series
-        moviesList = movies
+        seriesList = series.filterNot { hiddenIds.contains(it.id) }
+        moviesList = movies.filterNot { hiddenIds.contains(it.id) }
     }
 }
