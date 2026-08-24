@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,33 +13,138 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
-import kotlinx.coroutines.delay
 
 @Composable
 fun VideoPlayerScreen(
     videoUriString: String,
     title: String = "Video",
     engine: String = "EXOPLAYER",
+    nextEpisodeTitle: String? = null,
+    onNextEpisode: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
-    if (engine == "VLC") {
-        VlcVideoPlayer(videoUriString = videoUriString, title = title, onBack = onBack)
-    } else {
-        ExoVideoPlayer(videoUriString = videoUriString, title = title, onBack = onBack)
+    var showNextOverlay by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        if (engine == "VLC") {
+            VlcVideoPlayer(
+                videoUriString = videoUriString,
+                title = title,
+                onBack = onBack,
+                onVideoEnded = {
+                    if (onNextEpisode != null) showNextOverlay = true else onBack()
+                }
+            )
+        } else {
+            ExoVideoPlayer(
+                videoUriString = videoUriString,
+                title = title,
+                onBack = onBack,
+                onVideoEnded = {
+                    if (onNextEpisode != null) showNextOverlay = true else onBack()
+                }
+            )
+        }
+
+        // Ventana superpuesta de Próximo Episodio
+        if (showNextOverlay && onNextEpisode != null) {
+            NextEpisodeOverlay(
+                nextTitle = nextEpisodeTitle ?: "Siguiente episodio",
+                onPlayNow = onNextEpisode,
+                onCancel = onBack
+            )
+        }
     }
 }
 
 @Composable
-fun ExoVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
+fun NextEpisodeOverlay(
+    nextTitle: String,
+    onPlayNow: () -> Unit,
+    onCancel: () -> Unit
+) {
+    var secondsLeft by remember { mutableIntStateOf(10) }
+
+    LaunchedEffect(secondsLeft) {
+        if (secondsLeft > 0) {
+            delay(1000)
+            secondsLeft--
+        } else {
+            onPlayNow()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F1F)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .padding(24.dp)
+                .widthIn(max = 400.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "El próximo episodio empieza en $secondsLeft s",
+                    color = Color.Gray,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = nextTitle,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onCancel) {
+                        Text("Cancelar", color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onPlayNow,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reproducir ya")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExoVideoPlayer(
+    videoUriString: String,
+    title: String,
+    onBack: () -> Unit,
+    onVideoEnded: () -> Unit
+) {
     val context = LocalContext.current
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -48,11 +154,22 @@ fun ExoVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                    onVideoEnded()
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -72,7 +189,12 @@ fun ExoVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
 }
 
 @Composable
-fun VlcVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
+fun VlcVideoPlayer(
+    videoUriString: String,
+    title: String,
+    onBack: () -> Unit,
+    onVideoEnded: () -> Unit
+) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(true) }
     var currentTimeMs by remember { mutableLongStateOf(0L) }
@@ -93,6 +215,13 @@ fun VlcVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
 
         mediaPlayer.media = media
         media.release()
+
+        mediaPlayer.setEventListener { event ->
+            if (event.type == MediaPlayer.Event.EndReached) {
+                onVideoEnded()
+            }
+        }
+
         mediaPlayer.play()
 
         onDispose {
