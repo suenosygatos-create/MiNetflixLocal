@@ -1,6 +1,7 @@
 package com.example.minetflixlocal
 
 import android.Manifest
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -23,7 +24,7 @@ class MainActivity : ComponentActivity() {
     private var seriesList by mutableStateOf<List<MediaSeries>>(emptyList())
     private var moviesList by mutableStateOf<List<MediaSeries>>(emptyList())
     private var activeProfile by mutableStateOf<UserProfile?>(null)
-    private var playerEngine by mutableStateOf("EXOPLAYER") // "EXOPLAYER" o "VLC"
+    private var playerEngine by mutableStateOf("EXOPLAYER")
 
     private val defaultProfiles = listOf(
         UserProfile("1", "Usuario 1", 0xFFE50914),
@@ -96,6 +97,10 @@ class MainActivity : ComponentActivity() {
                                 playingVideoUri = episode.videoPath
                                 playingVideoTitle = episode.title
                                 currentScreen = ScreenState.PLAYER
+                            },
+                            onUpdatePoster = { newUri ->
+                                updateMediaPoster(media.id, newUri)
+                                selectedMedia = selectedMedia?.copy(posterUri = newUri)
                             }
                         )
                     }
@@ -126,6 +131,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun updateMediaPoster(mediaId: String, newUri: Uri) {
+        seriesList = seriesList.map { if (it.id == mediaId) it.copy(posterUri = newUri) else it }
+        moviesList = moviesList.map { if (it.id == mediaId) it.copy(posterUri = newUri) else it }
     }
 
     private fun checkAndRequestPermissions() {
