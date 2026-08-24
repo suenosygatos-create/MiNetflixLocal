@@ -1,5 +1,11 @@
 package com.example.minetflixlocal
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -731,12 +737,6 @@ fun ProfileAvatarItem(
 // ==========================================
 // 8. PANTALLA PRINCIPAL DE VIDEOS
 // ==========================================
-import android.app.Activity
-import android.content.pm.ActivityInfo
-import android.view.WindowManager
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 
 @Composable
 fun VideoPlayerScreen(
@@ -746,13 +746,12 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // 1. Configuración de pantalla completa horizontal y bloqueo de apagado
+    // 1. Pantalla completa horizontal inmersiva y bloqueo de apagado
     DisposableEffect(Unit) {
         activity?.let {
             it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             
-            // Ocultar barra de estado y de navegación (Modo inmersivo)
             val windowInsetsController = WindowCompat.getInsetsController(it.window, it.window.decorView)
             windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
@@ -769,13 +768,16 @@ fun VideoPlayerScreen(
         }
     }
 
-    // 2. Inicialización del reproductor
+    // 2. ExoPlayer con saltos de 10 segundos configurados en el Builder
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(videoUri))
-            prepare()
-            playWhenReady = true
-        }
+        ExoPlayer.Builder(context)
+            .setSeekForwardIncrementMs(10000)
+            .setSeekBackIncrementMs(10000)
+            .build().apply {
+                setMediaItem(MediaItem.fromUri(videoUri))
+                prepare()
+                playWhenReady = true
+            }
     }
 
     DisposableEffect(Unit) {
@@ -784,7 +786,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // 3. Interfaz con barra de tiempo, pausa/play, retroceder/adelantar integrados
+    // 3. Reproductor con controles nativos estilo TV
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
@@ -793,20 +795,16 @@ fun VideoPlayerScreen(
                     useController = true
                     keepScreenOn = true
                     
-                    // Configuración de controles tipo reproductor de TV / Streaming
                     setShowNextButton(false)
                     setShowPreviousButton(false)
                     setShowFastForwardButton(true)
                     setShowRewindButton(true)
-                    setFastForwardIncrementMs(10000) // Adelantar 10 segundos
-                    setRewindIncrementMs(10000)      // Retroceder 10 segundos
-                    controllerShowTimeoutMs = 3500   // Ocultar controles tras 3.5s de inactividad
+                    controllerShowTimeoutMs = 3500
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Botón de volver rápido en la esquina superior
         IconButton(
             onClick = onBack,
             modifier = Modifier
