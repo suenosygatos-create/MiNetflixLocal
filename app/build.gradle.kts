@@ -47,8 +47,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-video:2.6.0")
 
-    // Reproductor Media3 ExoPlayer (Soporte MKV, MP4, TS, AVI, etc.)
-    implementation("androidx.media3:media3-exoplayer:1.3.0")
-    implementation("androidx.media3:media3-ui:1.3.0")
-    implementation("androidx.media3:media3-session:1.3.0")
+    // Motor de reproductor VLC (Reproduce todos los códecs de audio y formatos MKV/AVI/AC3)
+    implementation("org.videolan.android:libvlc-all:3.5.1")
 }
