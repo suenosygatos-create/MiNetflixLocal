@@ -11,8 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
-import com.example.minetflixlocal.ui.*
-import com.example.minetflixlocal.ui.theme.*
+
+// Asegúrate de importar tu tema y las pantallas desde donde estén ubicadas:
+import com.example.minetflixlocal.ui.HomeScreen
+import com.example.minetflixlocal.ui.ProfileSelectionScreen
+import com.example.minetflixlocal.ui.SettingsScreen
+import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme // Cambia esta ruta si Theme.kt está en otra carpeta
 import com.example.minetflixlocal.util.WatchProgress
 import com.example.minetflixlocal.util.WatchProgressManager
 
@@ -62,7 +66,7 @@ fun MainApp() {
     when (currentScreen) {
         Screen.PROFILE_SELECTION -> {
             ProfileSelectionScreen(
-                onProfileSelected = { profile ->
+                onProfileSelected = { profile: UserProfile ->
                     activeProfile = profile
                     currentScreen = Screen.HOME
                 }
