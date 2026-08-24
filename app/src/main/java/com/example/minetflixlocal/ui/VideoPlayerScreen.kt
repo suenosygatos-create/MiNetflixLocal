@@ -5,11 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -28,19 +27,70 @@ import kotlinx.coroutines.delay
 fun VideoPlayerScreen(
     videoUriString: String,
     title: String = "Video",
+    engine: String = "EXOPLAYER",
     onBack: () -> Unit
 ) {
+    if (engine == "VLC") {
+        VlcVideoPlayer(videoUriString = videoUriString, title = title, onBack = onBack)
+    } else {
+        ExoVideoPlayer(videoUriString = videoUriString, title = title, onBack = onBack)
+    }
+}
+
+@Composable
+fun ExoVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(Uri.parse(videoUriString)))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = true
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(16.dp).align(Alignment.TopStart)
+        ) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+fun VlcVideoPlayer(videoUriString: String, title: String, onBack: () -> Unit) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(true) }
     var currentTimeMs by remember { mutableLongStateOf(0L) }
     var totalTimeMs by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
 
-    val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames", "-vvv")) }
+    val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames")) }
     val mediaPlayer = remember { MediaPlayer(libVLC) }
 
     DisposableEffect(Unit) {
-        val media = Media(libVLC, Uri.parse(videoUriString))
+        val uri = Uri.parse(videoUriString)
+        val media = if (uri.scheme == "content") {
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            if (pfd != null) Media(libVLC, pfd.fileDescriptor) else Media(libVLC, uri)
+        } else {
+            Media(libVLC, uri)
+        }
+
         mediaPlayer.media = media
         media.release()
         mediaPlayer.play()
@@ -83,11 +133,8 @@ fun VideoPlayerScreen(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.4f))
             ) {
-                // Barra Superior
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
@@ -96,7 +143,6 @@ fun VideoPlayerScreen(
                     Text(text = title, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
 
-                // Controles Centrales (-10s / Play-Pause / +10s)
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(32.dp),
@@ -128,7 +174,6 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Barra de Progreso Inferior
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
