@@ -731,43 +731,97 @@ fun ProfileAvatarItem(
 // ==========================================
 // 8. PANTALLA PRINCIPAL DE VIDEOS
 // ==========================================
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+
 @Composable
-fun VideoAppScreen(
-    activeProfile: UserProfile,
-    onChangeProfile: () -> Unit
+fun VideoPlayerScreen(
+    videoUri: Uri,
+    onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var hasPermission by remember { mutableStateOf(false) }
-    var allVideos by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
-    var hiddenVideoIds by remember { mutableStateOf(loadHiddenVideos(context)) }
-    var playerEngine by remember { mutableStateOf(loadPlayerEngine(context)) }
-    var selectedVideo by remember { mutableStateOf<VideoFile?>(null) }
-    var selectedVideoSeries by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
-    var playFromStart by remember { mutableStateOf(false) }
-    var currentTab by remember { mutableStateOf("home") }
-    var detailVideo by remember { mutableStateOf<VideoFile?>(null) }
-    var videoToEditImage by remember { mutableStateOf<VideoFile?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var refreshTrigger by remember { mutableStateOf(0) }
+    val activity = context as? Activity
 
-    val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+    // 1. Configuración de pantalla completa horizontal y bloqueo de apagado
+    DisposableEffect(Unit) {
+        activity?.let {
+            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            
+            // Ocultar barra de estado y de navegación (Modo inmersivo)
+            val windowInsetsController = WindowCompat.getInsetsController(it.window, it.window.decorView)
+            windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        hasPermission = granted
-        if (granted) allVideos = loadAllLocalVideos(context)
-    }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { newUri ->
-            videoToEditImage?.let { target ->
-                val saved = saveImageLocally(context, target.id, newUri)
-                if (saved != null) {
-                    allVideos = allVideos.map { if (it.id == target.id) it.copy(customImageUri = saved) else it }
-                }
+        onDispose {
+            activity?.let {
+                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                
+                val windowInsetsController = WindowCompat.getInsetsController(it.window, it.window.decorView)
+                windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
             }
         }
     }
+
+    // 2. Inicialización del reproductor
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(videoUri))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    // 3. Interfaz con barra de tiempo, pausa/play, retroceder/adelantar integrados
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = true
+                    keepScreenOn = true
+                    
+                    // Configuración de controles tipo reproductor de TV / Streaming
+                    setShowNextButton(false)
+                    setShowPreviousButton(false)
+                    setShowFastForwardButton(true)
+                    setShowRewindButton(true)
+                    setFastForwardIncrementMs(10000) // Adelantar 10 segundos
+                    setRewindIncrementMs(10000)      // Retroceder 10 segundos
+                    controllerShowTimeoutMs = 3500   // Ocultar controles tras 3.5s de inactividad
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Botón de volver rápido en la esquina superior
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .padding(16.dp)
+                .align(Alignment.TopStart)
+                .background(Color.Black.copy(alpha = 0.4f), shape = CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Volver",
+                tint = Color.White
+            )
+        }
+    }
+}
 
     LaunchedEffect(Unit) { launcher.launch(permissionToRequest) }
 
