@@ -222,3 +222,105 @@ fun VlcVideoPlayer(
         }
     }
 }
+@Composable
+fun NextEpisodeOverlay(
+    nextTitle: String,
+    posterUri: Uri?,
+    onPlayNow: () -> Unit,
+    onCancel: () -> Unit
+) {
+    var secondsLeft by remember { mutableIntStateOf(10) }
+
+    LaunchedEffect(secondsLeft) {
+        if (secondsLeft > 0) {
+            delay(1000)
+            secondsLeft--
+        } else {
+            onPlayNow()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F1F)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .padding(24.dp)
+                .width(360.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "El próximo episodio empieza en $secondsLeft s",
+                    color = Color.Gray,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 100.dp, height = 60.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF333333))
+                    ) {
+                        if (posterUri != null) {
+                            AsyncImage(
+                                model = posterUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = nextTitle,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onCancel) {
+                        Text("Cancelar", color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onPlayNow,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reproducir ya")
+                    }
+                }
+            }
+        }
+    }
+}
