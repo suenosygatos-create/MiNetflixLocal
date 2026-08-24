@@ -2,31 +2,22 @@ package com.example.minetflixlocal.model
 
 import android.net.Uri
 
-data class UserProfile(
-    val id: String,
-    val name: String,
-    val avatarColorHex: Long
-)
-
-data class VideoItem(
+data class Episode(
     val id: String,
     val title: String,
-    val videoPath: String,
-    val duration: String = "22 min",
-    val thumbnailUri: Uri? = null
+    val videoPath: String
 )
 
 data class Season(
     val seasonNumber: Int,
-    val seasonName: String,
-    val episodes: List<VideoItem>
+    val title: String,
+    val episodes: List<Episode>
 )
 
 data class MediaSeries(
     val id: String,
     val title: String,
-    val posterUri: Uri? = null,
     val isMovie: Boolean = false,
-    val seasons: List<Season> = emptyList(),
-    val movieVideo: VideoItem? = null
+    var posterUri: Uri? = null,
+    val seasons: List<Season>
 )
