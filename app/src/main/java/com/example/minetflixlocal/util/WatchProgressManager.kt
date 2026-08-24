@@ -15,12 +15,10 @@ class WatchProgressManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("netflix_watch_progress", Context.MODE_PRIVATE)
 
-    // Clave única combinando perfil + contenido
     private fun makeKey(profileId: String, mediaId: String): String {
         return "${profileId}_${mediaId}"
     }
 
-    // Guardar avance de un perfil
     fun saveProgress(
         profileId: String,
         mediaId: String,
@@ -33,7 +31,6 @@ class WatchProgressManager(context: Context) {
         prefs.edit().putString(key, value).apply()
     }
 
-    // Obtener todo el historial de reproducción de un perfil específico
     fun getProgressForProfile(profileId: String): Map<String, WatchProgress> {
         val resultMap = mutableMapOf<String, WatchProgress>()
         val prefix = "${profileId}_"
