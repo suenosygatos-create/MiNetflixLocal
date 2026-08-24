@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
@@ -47,6 +48,18 @@ class MainActivity : ComponentActivity() {
             var currentScreen by remember { mutableStateOf(ScreenState.PROFILES) }
             var selectedMedia by remember { mutableStateOf<MediaSeries?>(null) }
             var playingVideoUri by remember { mutableStateOf<String?>(null) }
+            var playingVideoTitle by remember { mutableStateOf("Video") }
+
+            // Soporte de navegación para los botones físicos/gestos del celular
+            BackHandler(enabled = currentScreen != ScreenState.PROFILES) {
+                when (currentScreen) {
+                    ScreenState.PLAYER -> currentScreen = ScreenState.DETAIL
+                    ScreenState.DETAIL -> currentScreen = ScreenState.HOME
+                    ScreenState.SETTINGS -> currentScreen = ScreenState.HOME
+                    ScreenState.HOME -> currentScreen = ScreenState.PROFILES
+                    else -> {}
+                }
+            }
 
             when (currentScreen) {
                 ScreenState.PROFILES -> {
@@ -81,6 +94,7 @@ class MainActivity : ComponentActivity() {
                             onBack = { currentScreen = ScreenState.HOME },
                             onEpisodeClick = { episode ->
                                 playingVideoUri = episode.videoPath
+                                playingVideoTitle = episode.title
                                 currentScreen = ScreenState.PLAYER
                             }
                         )
@@ -91,6 +105,7 @@ class MainActivity : ComponentActivity() {
                     playingVideoUri?.let { uri ->
                         VideoPlayerScreen(
                             videoUriString = uri,
+                            title = playingVideoTitle,
                             onBack = { currentScreen = ScreenState.DETAIL }
                         )
                     }
