@@ -3,14 +3,6 @@ package com.example.minetflixlocal.util
 import android.content.Context
 import android.content.SharedPreferences
 
-data class WatchProgress(
-    val mediaId: String,
-    val episodeId: String,
-    val positionMs: Long,
-    val totalDurationMs: Long,
-    val lastUpdated: Long = System.currentTimeMillis()
-)
-
 class WatchProgressManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("netflix_watch_progress", Context.MODE_PRIVATE)
