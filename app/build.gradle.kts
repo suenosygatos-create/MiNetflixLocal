@@ -41,15 +41,17 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
-    // Iconos extendidos para Compose (Soluciona Replay10, Forward10, Pause)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.8.2")
     
-    // Carga de imágenes/miniaturas/portadas
+    // Carga de imágenes/miniaturas
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-video:2.6.0")
 
-    // Motor de reproductor VLC (Reproduce todos los códecs de audio y formatos MKV/AVI/AC3)
+    // Reproductor 1: Google ExoPlayer (Media3)
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-ui:1.2.1")
+
+    // Reproductor 2: LibVLC (Compatibilidad con AC3 / DTS / MKV)
     implementation("org.videolan.android:libvlc-all:3.5.1")
 }
