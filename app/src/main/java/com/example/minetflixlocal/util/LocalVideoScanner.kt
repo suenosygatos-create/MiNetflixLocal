@@ -8,8 +8,11 @@ import com.example.minetflixlocal.model.Episode
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.Season
 import java.io.File
+import java.util.regex.Pattern
 
 object LocalVideoScanner {
+
+    private val SEASON_PATTERN = Pattern.compile("(?i)(season|temporada|temp|s)\\s*(\\d+)")
 
     fun scanLocalVideos(context: Context): Pair<List<MediaSeries>, List<MediaSeries>> {
         val seriesList = mutableListOf<MediaSeries>()
@@ -22,7 +25,9 @@ object LocalVideoScanner {
         )
 
         val queryUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        val folderMap = mutableMapOf<String, MutableList<Pair<String, Uri>>>()
+        
+        // Estructura: SeriesName -> Map<SeasonName, List<Pair<VideoName, VideoUri>>>
+        val masterCatalog = mutableMapOf<String, MutableMap<String, MutableList<Pair<String, Uri>>>>()
 
         context.contentResolver.query(queryUri, projection, null, null, null)?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
@@ -36,20 +41,40 @@ object LocalVideoScanner {
                 val contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
 
                 val file = File(path)
-                val folderName = file.parentFile?.name ?: "Otros"
+                val parentFolder = file.parentFile
+                val parentName = parentFolder?.name ?: "Otros"
 
-                folderMap.getOrPut(folderName) { mutableListOf() }.add(Pair(name, contentUri))
+                val matcher = SEASON_PATTERN.matcher(parentName)
+                
+                val seriesName: String
+                val seasonName: String
+
+                if (matcher.find() && parentFolder?.parentFile != null) {
+                    // La carpeta actual es "Temporada X". La carpeta padre es el título de la serie.
+                    seriesName = parentFolder.parentFile!!.name
+                    seasonName = parentName
+                } else {
+                    seriesName = parentName
+                    seasonName = "Temporada 1"
+                }
+
+                masterCatalog
+                    .getOrPut(seriesName) { mutableMapOf() }
+                    .getOrPut(seasonName) { mutableListOf() }
+                    .add(Pair(name, contentUri))
             }
         }
 
-        folderMap.forEach { (folderName, videoFiles) ->
-            if (videoFiles.size == 1) {
-                // Caso 1: Película (Un solo video en la carpeta)
-                val (videoName, videoUri) = videoFiles.first()
+        masterCatalog.forEach { (seriesTitle, seasonsMap) ->
+            val totalVideos = seasonsMap.values.sumOf { it.size }
+
+            if (totalVideos == 1 && seasonsMap.size == 1) {
+                // Película
+                val (videoName, videoUri) = seasonsMap.values.first().first()
                 val cleanTitle = videoName.substringBeforeLast(".")
                 moviesList.add(
                     MediaSeries(
-                        id = folderName + "_movie",
+                        id = seriesTitle + "_movie",
                         title = cleanTitle,
                         isMovie = true,
                         posterUri = videoUri,
@@ -63,22 +88,27 @@ object LocalVideoScanner {
                     )
                 )
             } else {
-                // Caso 2: Serie (Más de un video en la carpeta)
-                val episodes = videoFiles.mapIndexed { index, pair ->
-                    Episode(
-                        id = index.toString(),
-                        title = pair.first.substringBeforeLast("."),
-                        videoPath = pair.second.toString()
-                    )
+                // Serie con una o múltiples temporadas
+                val seasonsList = seasonsMap.entries.mapIndexed { sIndex, (seasonTitle, videoFiles) ->
+                    val episodes = videoFiles.mapIndexed { eIndex, (vName, vUri) ->
+                        Episode(
+                            id = "${sIndex}_$eIndex",
+                            title = vName.substringBeforeLast("."),
+                            videoPath = vUri.toString()
+                        )
+                    }
+                    Season(seasonNumber = sIndex + 1, title = seasonTitle, episodes = episodes)
                 }
+
+                val firstUri = seasonsMap.values.firstOrNull()?.firstOrNull()?.second
 
                 seriesList.add(
                     MediaSeries(
-                        id = folderName + "_series",
-                        title = folderName,
+                        id = seriesTitle + "_series",
+                        title = seriesTitle,
                         isMovie = false,
-                        posterUri = videoFiles.first().second,
-                        seasons = listOf(Season(seasonNumber = 1, title = "Temporada 1", episodes = episodes))
+                        posterUri = firstUri,
+                        seasons = seasonsList
                     )
                 )
             }
