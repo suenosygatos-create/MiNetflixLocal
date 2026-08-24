@@ -37,15 +37,16 @@ fun VideoPlayerScreen(
     videoUriString: String,
     title: String = "Video",
     engine: String = "EXOPLAYER",
+    startPositionMs: Long = 0L,
     nextEpisodeTitle: String? = null,
     nextEpisodePosterUri: Uri? = null,
+    onProgressUpdate: (Long, Long) -> Unit,
     onNextEpisode: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var showNextOverlay by remember { mutableStateOf(false) }
 
-    // Evita que la pantalla se apague mientras se reproduce el video
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -59,6 +60,8 @@ fun VideoPlayerScreen(
             VlcVideoPlayer(
                 videoUriString = videoUriString,
                 title = title,
+                startPositionMs = startPositionMs,
+                onProgressUpdate = onProgressUpdate,
                 onBack = onBack,
                 onVideoEnded = {
                     if (onNextEpisode != null) showNextOverlay = true else onBack()
@@ -68,6 +71,8 @@ fun VideoPlayerScreen(
             ExoVideoPlayer(
                 videoUriString = videoUriString,
                 title = title,
+                startPositionMs = startPositionMs,
+                onProgressUpdate = onProgressUpdate,
                 onBack = onBack,
                 onVideoEnded = {
                     if (onNextEpisode != null) showNextOverlay = true else onBack()
@@ -75,7 +80,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Ventana estilo Netflix con Miniatura
         if (showNextOverlay && onNextEpisode != null) {
             NextEpisodeOverlay(
                 nextTitle = nextEpisodeTitle ?: "Siguiente episodio",
@@ -88,112 +92,11 @@ fun VideoPlayerScreen(
 }
 
 @Composable
-fun NextEpisodeOverlay(
-    nextTitle: String,
-    posterUri: Uri?,
-    onPlayNow: () -> Unit,
-    onCancel: () -> Unit
-) {
-    var secondsLeft by remember { mutableIntStateOf(10) }
-
-    LaunchedEffect(secondsLeft) {
-        if (secondsLeft > 0) {
-            delay(1000)
-            secondsLeft--
-        } else {
-            onPlayNow()
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F1F)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .padding(24.dp)
-                .width(360.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "El próximo episodio empieza en $secondsLeft s",
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 100.dp, height = 60.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF333333))
-                    ) {
-                        if (posterUri != null) {
-                            AsyncImage(
-                                model = posterUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Text(
-                        text = nextTitle,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        maxLines = 2,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onCancel) {
-                        Text("Cancelar", color = Color.White)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = onPlayNow,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reproducir ya")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun ExoVideoPlayer(
     videoUriString: String,
     title: String,
+    startPositionMs: Long,
+    onProgressUpdate: (Long, Long) -> Unit,
     onBack: () -> Unit,
     onVideoEnded: () -> Unit
 ) {
@@ -202,7 +105,17 @@ fun ExoVideoPlayer(
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(Uri.parse(videoUriString)))
             prepare()
+            if (startPositionMs > 0) seekTo(startPositionMs)
             playWhenReady = true
+        }
+    }
+
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            if (exoPlayer.isPlaying) {
+                onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
+            }
+            delay(3000)
         }
     }
 
@@ -216,6 +129,7 @@ fun ExoVideoPlayer(
         }
         exoPlayer.addListener(listener)
         onDispose {
+            onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
@@ -244,15 +158,12 @@ fun ExoVideoPlayer(
 fun VlcVideoPlayer(
     videoUriString: String,
     title: String,
+    startPositionMs: Long,
+    onProgressUpdate: (Long, Long) -> Unit,
     onBack: () -> Unit,
     onVideoEnded: () -> Unit
 ) {
     val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(true) }
-    var currentTimeMs by remember { mutableLongStateOf(0L) }
-    var totalTimeMs by remember { mutableLongStateOf(0L) }
-    var showControls by remember { mutableStateOf(true) }
-
     val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames")) }
     val mediaPlayer = remember { MediaPlayer(libVLC) }
 
@@ -275,8 +186,10 @@ fun VlcVideoPlayer(
         }
 
         mediaPlayer.play()
+        if (startPositionMs > 0) mediaPlayer.time = startPositionMs
 
         onDispose {
+            onProgressUpdate(mediaPlayer.time, mediaPlayer.length)
             mediaPlayer.stop()
             mediaPlayer.release()
             libVLC.release()
@@ -286,19 +199,13 @@ fun VlcVideoPlayer(
     LaunchedEffect(mediaPlayer) {
         while (true) {
             if (mediaPlayer.isPlaying) {
-                currentTimeMs = mediaPlayer.time
-                totalTimeMs = mediaPlayer.length
+                onProgressUpdate(mediaPlayer.time, mediaPlayer.length)
             }
-            delay(500)
+            delay(3000)
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable { showControls = !showControls }
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
                 VLCVideoLayout(ctx).apply {
@@ -307,88 +214,11 @@ fun VlcVideoPlayer(
             },
             modifier = Modifier.fillMaxSize()
         )
-
-        if (showControls) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
-                    }
-                    Text(text = title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                }
-
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { mediaPlayer.time = (mediaPlayer.time - 10000).coerceAtLeast(0) }) {
-                        Icon(Icons.Default.Replay10, contentDescription = "-10s", tint = Color.White, modifier = Modifier.size(48.dp))
-                    }
-
-                    IconButton(onClick = {
-                        if (mediaPlayer.isPlaying) {
-                            mediaPlayer.pause()
-                            isPlaying = false
-                        } else {
-                            mediaPlayer.play()
-                            isPlaying = true
-                        }
-                    }) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play/Pause",
-                            tint = Color.White,
-                            modifier = Modifier.size(64.dp)
-                        )
-                    }
-
-                    IconButton(onClick = { mediaPlayer.time = (mediaPlayer.time + 10000).coerceAtMost(totalTimeMs) }) {
-                        Icon(Icons.Default.Forward10, contentDescription = "+10s", tint = Color.White, modifier = Modifier.size(48.dp))
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Slider(
-                        value = if (totalTimeMs > 0) currentTimeMs.toFloat() / totalTimeMs.toFloat() else 0f,
-                        onValueChange = { percent ->
-                            val targetTime = (percent * totalTimeMs).toLong()
-                            mediaPlayer.time = targetTime
-                            currentTimeMs = targetTime
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFFE50914),
-                            activeTrackColor = Color(0xFFE50914)
-                        )
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = formatTime(currentTimeMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
-                        Text(text = formatTime(totalTimeMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(16.dp).align(Alignment.TopStart)
+        ) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
         }
     }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%02d:%02d", minutes, seconds)
 }
