@@ -14,9 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -107,12 +109,11 @@ fun MediaSection(
 fun MediaCard(media: MediaSeries, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .width(120.dp)
-            .height(170.dp)
+            .width(130.dp)
+            .height(185.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(Color.DarkGray)
-            .clickable { onClick() },
-        contentAlignment = Alignment.BottomCenter
+            .clickable { onClick() }
     ) {
         if (media.posterUri != null) {
             AsyncImage(
@@ -121,11 +122,27 @@ fun MediaCard(media: MediaSeries, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
+        }
+
+        // Degradado oscuro para resaltar el texto sobre la portada
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                        startY = 100f
+                    )
+                ),
+            contentAlignment = Alignment.BottomStart
+        ) {
             Text(
                 text = media.title,
                 color = Color.White,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(8.dp)
             )
         }
