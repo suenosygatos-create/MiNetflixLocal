@@ -1,34 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permisos para leer videos -->
+    <!-- Permisos para leer videos de la memoria -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Para Android 13 en adelante (API 33+) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    
-    <!-- Para Android 12 y anteriores (API 32 o inferior) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
-                     android:maxSdkVersion="32" />
-
-    <application
-        ... >
-        ...
-    </application>
-</manifest>
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_media_play"
-        android:label="MiNetflix"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoTitleBar">
+        
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Material.NoActionBar">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
