@@ -193,3 +193,27 @@ class MainActivity : ComponentActivity() {
         moviesList = movies.filterNot { hiddenIds.contains(it.id) }
     }
 }
+// Instancia dentro del ComponentActivity / Compose:
+val context = LocalContext.current
+val progressManager = remember { WatchProgressManager(context) }
+
+// Estado para guardar el mapa de progreso del perfil actual:
+var currentProfileProgress by remember { mutableStateOf<Map<String, WatchProgress>>(emptyMap()) }
+
+// Cada vez que cambia el perfil activo, recarga sus datos independientes:
+LaunchedEffect(activeProfile?.id) {
+    activeProfile?.let { profile ->
+        currentProfileProgress = progressManager.getProgressForProfile(profile.id)
+    }
+}
+
+// Al pasarle los datos a HomeScreen:
+HomeScreen(
+    activeProfile = activeProfile,
+    seriesList = seriesList,
+    moviesList = moviesList,
+    continueWatchingMap = currentProfileProgress, // Pasa solo los de este perfil
+    onMediaSelected = { ... },
+    onResumePlayback = { ... },
+    onOpenSettings = { ... }
+)
