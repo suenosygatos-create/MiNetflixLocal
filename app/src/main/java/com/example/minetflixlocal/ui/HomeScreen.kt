@@ -1,7 +1,6 @@
 package com.example.minetflixlocal.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,9 +8,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
+import com.example.minetflixlocal.util.WatchProgress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,32 +34,84 @@ fun HomeScreen(
     activeProfile: UserProfile?,
     seriesList: List<MediaSeries>,
     moviesList: List<MediaSeries>,
+    continueWatchingMap: Map<String, WatchProgress>,
     onMediaSelected: (MediaSeries) -> Unit,
+    onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearching by remember { mutableStateOf(false) }
+
+    val allMedia = remember(seriesList, moviesList) { seriesList + moviesList }
+
+    val filteredMovies = remember(searchQuery, moviesList) {
+        if (searchQuery.isBlank()) moviesList
+        else moviesList.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val filteredSeries = remember(searchQuery, seriesList) {
+        if (searchQuery.isBlank()) seriesList
+        else seriesList.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val continueWatchingList = remember(continueWatchingMap, allMedia) {
+        continueWatchingMap.values.mapNotNull { progress ->
+            val media = allMedia.find { it.id == progress.mediaId }
+            if (media != null) Pair(media, progress) else null
+        }.sortedByDescending { it.second.lastUpdated }
+    }
+
+    val recommendedList = remember(allMedia) {
+        allMedia.shuffled().take(6)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "NETFLIX",
-                            color = Color(0xFFE50914),
-                            fontWeight = FontWeight.Black,
-                            fontSize = 24.sp
+                    if (isSearching) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Buscar películas o series...", color = Color.Gray) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFE50914)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        activeProfile?.let {
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "${it.avatarIcon} ${it.name}",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
+                                text = "NETFLIX",
+                                color = Color(0xFFE50914),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 24.sp
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            activeProfile?.let {
+                                Text(
+                                    text = "${it.avatarIcon} ${it.name}",
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        isSearching = !isSearching
+                        if (!isSearching) searchQuery = ""
+                    }) {
+                        Icon(
+                            imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = "Buscar",
+                            tint = Color.White
+                        )
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = Color.White)
                     }
@@ -72,89 +127,93 @@ fun HomeScreen(
                 .padding(padding),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            // Sección Películas
-            if (moviesList.isNotEmpty()) {
+            // Sección: Seguir viendo
+            if (continueWatchingList.isNotEmpty() && searchQuery.isBlank()) {
                 item {
-                    MediaSectionRow(
-                        title = "Películas",
-                        items = moviesList,
-                        onMediaSelected = onMediaSelected
-                    )
-                }
-            }
-
-            // Sección Series
-            if (seriesList.isNotEmpty()) {
-                item {
-                    MediaSectionRow(
-                        title = "Series de TV",
-                        items = seriesList,
-                        onMediaSelected = onMediaSelected
-                    )
-                }
-            }
-
-            if (moviesList.isEmpty() && seriesList.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
                         Text(
-                            text = "No se encontraron videos locales",
-                            color = Color.Gray,
-                            fontSize = 16.sp
+                            text = "Seguir viendo",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
+
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            items(continueWatchingList) { (media, progress) ->
+                                ContinueWatchingCard(
+                                    media = media,
+                                    progress = progress,
+                                    onClick = { onResumePlayback(media, progress.episodeId) }
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun MediaSectionRow(
-    title: String,
-    items: List<MediaSeries>,
-    onMediaSelected: (MediaSeries) -> Unit
-) {
-    Column(modifier = Modifier.padding(bottom = 24.dp)) {
-        Text(
-            text = title,
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+            // Sección: Recomendaciones
+            if (recommendedList.isNotEmpty() && searchQuery.isBlank()) {
+                item {
+                    MediaSectionRow(
+                        title = "Recomendados para ti",
+                        items = recommendedList,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
+            }
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(items) { media ->
-                MediaPosterCard(media = media, onClick = { onMediaSelected(media) })
+            // Sección: Películas
+            if (filteredMovies.isNotEmpty()) {
+                item {
+                    MediaSectionRow(
+                        title = "Películas",
+                        items = filteredMovies,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
+            }
+
+            // Sección: Series
+            if (filteredSeries.isNotEmpty()) {
+                item {
+                    MediaSectionRow(
+                        title = "Series de TV",
+                        items = filteredSeries,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun MediaPosterCard(media: MediaSeries, onClick: () -> Unit) {
-    Column(
+fun ContinueWatchingCard(
+    media: MediaSeries,
+    progress: WatchProgress,
+    onClick: () -> Unit
+) {
+    val progressPercent = if (progress.totalDurationMs > 0) {
+        progress.positionMs.toFloat() / progress.totalDurationMs.toFloat()
+    } else 0f
+
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
         modifier = Modifier
-            .width(130.dp)
+            .width(140.dp)
             .clickable { onClick() }
     ) {
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
-            modifier = Modifier
-                .width(130.dp)
-                .height(185.dp)
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .width(140.dp)
+                    .height(160.dp)
+            ) {
                 if (media.posterUri != null) {
                     AsyncImage(
                         model = media.posterUri,
@@ -162,41 +221,29 @@ fun MediaPosterCard(media: MediaSeries, onClick: () -> Unit) {
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF333333)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "▶", color = Color.White, fontSize = 28.sp)
-                    }
                 }
-
-                // Badge de tipo
-                Surface(
-                    color = Color.Black.copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(bottomEnd = 6.dp),
-                    modifier = Modifier.align(Alignment.TopStart)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (media.isMovie) "PELÍCULA" else "${media.seasons.size} TEMP",
-                        color = if (media.isMovie) Color(0xFFE50914) else Color(0xFF00D277),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Continuar",
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp)
                     )
                 }
             }
+            LinearProgressIndicator(
+                progress = { progressPercent },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+                color = Color(0xFFE50914),
+                trackColor = Color.Gray
+            )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = media.title,
-            color = Color.LightGray,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
