@@ -23,8 +23,8 @@ fun ProfileSelectionScreen(
     onProfileSelected: (UserProfile) -> Unit
 ) {
     val defaultProfiles = listOf(
-        UserProfile(id = "1", name = "Principal", isKids = false),
-        UserProfile(id = "2", name = "Niños", isKids = true)
+        UserProfile(id = "1", name = "Principal"),
+        UserProfile(id = "2", name = "Niños")
     )
 
     Box(
@@ -78,7 +78,7 @@ private fun ProfileCard(
             modifier = Modifier
                 .size(100.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(if (profile.isKids) Color(0xFF009688) else Color(0xFFE50914)),
+                .background(Color(0xFFE50914)),
             contentAlignment = Alignment.Center
         ) {
             Text(
