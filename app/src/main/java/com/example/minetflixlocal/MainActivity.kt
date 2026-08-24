@@ -10,8 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import com.example.minetflixlocal.model.Episode
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
@@ -51,8 +50,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             var currentScreen by remember { mutableStateOf(ScreenState.PROFILES) }
             var selectedMedia by remember { mutableStateOf<MediaSeries?>(null) }
-            var playingVideoUri by remember { mutableStateOf<String?>(null) }
-            var playingVideoTitle by remember { mutableStateOf("Video") }
+            var currentEpisodeList by remember { mutableStateOf<List<Episode>>(emptyList()) }
+            var currentEpisodeIndex by remember { mutableIntStateOf(0) }
 
             BackHandler(enabled = currentScreen != ScreenState.PROFILES) {
                 when (currentScreen) {
@@ -96,8 +95,10 @@ class MainActivity : ComponentActivity() {
                             media = media,
                             onBack = { currentScreen = ScreenState.HOME },
                             onEpisodeClick = { episode ->
-                                playingVideoUri = episode.videoPath
-                                playingVideoTitle = episode.title
+                                val allEpisodes = media.seasons.flatMap { it.episodes }
+                                val index = allEpisodes.indexOf(episode)
+                                currentEpisodeList = allEpisodes
+                                currentEpisodeIndex = if (index >= 0) index else 0
                                 currentScreen = ScreenState.PLAYER
                             },
                             onUpdatePoster = { newUri ->
@@ -109,11 +110,18 @@ class MainActivity : ComponentActivity() {
                 }
 
                 ScreenState.PLAYER -> {
-                    playingVideoUri?.let { uri ->
+                    val currentEpisode = currentEpisodeList.getOrNull(currentEpisodeIndex)
+                    val nextEpisode = currentEpisodeList.getOrNull(currentEpisodeIndex + 1)
+
+                    if (currentEpisode != null) {
                         VideoPlayerScreen(
-                            videoUriString = uri,
-                            title = playingVideoTitle,
+                            videoUriString = currentEpisode.videoPath,
+                            title = currentEpisode.title,
                             engine = playerEngine,
+                            nextEpisodeTitle = nextEpisode?.title,
+                            onNextEpisode = if (nextEpisode != null) {
+                                { currentEpisodeIndex++ }
+                            } else null,
                             onBack = { currentScreen = ScreenState.DETAIL }
                         )
                     }
