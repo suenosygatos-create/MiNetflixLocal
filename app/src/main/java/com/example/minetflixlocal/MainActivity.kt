@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
     private var seriesList by mutableStateOf<List<MediaSeries>>(emptyList())
     private var moviesList by mutableStateOf<List<MediaSeries>>(emptyList())
     private var activeProfile by mutableStateOf<UserProfile?>(null)
+    private var playerEngine by mutableStateOf("EXOPLAYER") // "EXOPLAYER" o "VLC"
 
     private val defaultProfiles = listOf(
         UserProfile("1", "Usuario 1", 0xFFE50914),
@@ -50,7 +51,6 @@ class MainActivity : ComponentActivity() {
             var playingVideoUri by remember { mutableStateOf<String?>(null) }
             var playingVideoTitle by remember { mutableStateOf("Video") }
 
-            // Soporte de navegación para los botones físicos/gestos del celular
             BackHandler(enabled = currentScreen != ScreenState.PROFILES) {
                 when (currentScreen) {
                     ScreenState.PLAYER -> currentScreen = ScreenState.DETAIL
@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                         VideoPlayerScreen(
                             videoUriString = uri,
                             title = playingVideoTitle,
+                            engine = playerEngine,
                             onBack = { currentScreen = ScreenState.DETAIL }
                         )
                     }
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
 
                 ScreenState.SETTINGS -> {
                     SettingsScreen(
+                        selectedEngine = playerEngine,
+                        onEngineChanged = { playerEngine = it },
                         onBack = { currentScreen = ScreenState.HOME },
                         onChangeProfile = { currentScreen = ScreenState.PROFILES },
                         onRescan = {
