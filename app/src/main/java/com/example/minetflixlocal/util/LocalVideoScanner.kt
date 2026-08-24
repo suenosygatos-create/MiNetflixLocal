@@ -43,10 +43,9 @@ object LocalVideoScanner {
                 val durationMin = if (durationMs > 0) "${durationMs / (1000 * 60)} min" else "Video"
 
                 val file = File(path)
-                val parentFolder = file.parentFile // Ejemplo: "Temporada 1" o "Peliculas"
-                val grandParentFolder = parentFolder?.parentFile // Ejemplo: "Los Simpson"
+                val parentFolder = file.parentFile
+                val grandParentFolder = parentFolder?.parentFile
 
-                // Lógica de Agrupación por carpetas
                 if (parentFolder != null && grandParentFolder != null &&
                     (parentFolder.name.contains("temp", ignoreCase = true) || parentFolder.name.contains("season", ignoreCase = true))
                 ) {
@@ -76,13 +75,12 @@ object LocalVideoScanner {
             }
         }
 
-        // Convertir el mapa procesado a la lista de MediaSeries final
         val seriesList = seriesMap.map { (seriesTitle, seasonsMap) ->
-            val seasons = seasonsMap.mapIndexed { index, (seasonName, episodes) ->
+            val seasons = seasonsMap.entries.toList().mapIndexed { index, entry ->
                 Season(
                     seasonNumber = index + 1,
-                    seasonName = seasonName,
-                    episodes = episodes
+                    seasonName = entry.key,
+                    episodes = entry.value
                 )
             }
             MediaSeries(
