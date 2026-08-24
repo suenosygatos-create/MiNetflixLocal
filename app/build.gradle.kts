@@ -43,7 +43,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.8.2")
     
-    // Carga de imágenes y miniaturas
+    // Carga de imágenes/miniaturas/portadas
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-video:2.6.0")
+
+    // Reproductor Media3 ExoPlayer (Soporte MKV, MP4, TS, AVI, etc.)
+    implementation("androidx.media3:media3-exoplayer:1.3.0")
+    implementation("androidx.media3:media3-ui:1.3.0")
+    implementation("androidx.media3:media3-session:1.3.0")
 }
