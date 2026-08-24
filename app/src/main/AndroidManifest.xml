@@ -4,7 +4,21 @@
     <!-- Permisos para leer videos -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Para Android 13 en adelante (API 33+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- Para Android 12 y anteriores (API 32 o inferior) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+                     android:maxSdkVersion="32" />
+
+    <application
+        ... >
+        ...
+    </application>
+</manifest>
     <application
         android:allowBackup="true"
         android:icon="@android:drawable/ic_media_play"
