@@ -1,6 +1,7 @@
 package com.example.minetflixlocal.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -40,17 +40,18 @@ fun HomeScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "MiNetflix",
+                            text = "NETFLIX",
                             color = Color(0xFFE50914),
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
                             fontSize = 24.sp
                         )
-                        if (activeProfile != null) {
-                            Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        activeProfile?.let {
                             Text(
-                                text = "(${activeProfile.name})",
-                                color = Color.Gray,
-                                fontSize = 14.sp
+                                text = "${it.avatarIcon} ${it.name}",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -60,91 +61,142 @@ fun HomeScreen(
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF141414))
             )
         },
-        containerColor = Color.Black
+        containerColor = Color(0xFF141414)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
+            contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            item {
-                MediaSection(title = "Series", items = seriesList, onItemClick = onMediaSelected)
+            // Sección Películas
+            if (moviesList.isNotEmpty()) {
+                item {
+                    MediaSectionRow(
+                        title = "Películas",
+                        items = moviesList,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
             }
-            item {
-                MediaSection(title = "Películas / Videos", items = moviesList, onItemClick = onMediaSelected)
+
+            // Sección Series
+            if (seriesList.isNotEmpty()) {
+                item {
+                    MediaSectionRow(
+                        title = "Series de TV",
+                        items = seriesList,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
+            }
+
+            if (moviesList.isEmpty() && seriesList.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No se encontraron videos locales",
+                            color = Color.Gray,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun MediaSection(
+fun MediaSectionRow(
     title: String,
     items: List<MediaSeries>,
-    onItemClick: (MediaSeries) -> Unit
+    onMediaSelected: (MediaSeries) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+    Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
             text = title,
             color = Color.White,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { media ->
-                MediaCard(media = media, onClick = { onItemClick(media) })
+                MediaPosterCard(media = media, onClick = { onMediaSelected(media) })
             }
         }
     }
 }
 
 @Composable
-fun MediaCard(media: MediaSeries, onClick: () -> Unit) {
-    Box(
+fun MediaPosterCard(media: MediaSeries, onClick: () -> Unit) {
+    Column(
         modifier = Modifier
             .width(130.dp)
-            .height(185.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.DarkGray)
             .clickable { onClick() }
     ) {
-        if (media.posterUri != null) {
-            AsyncImage(
-                model = media.posterUri,
-                contentDescription = media.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Degradado oscuro para resaltar el texto sobre la portada
-        Box(
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                        startY = 100f
-                    )
-                ),
-            contentAlignment = Alignment.BottomStart
+                .width(130.dp)
+                .height(185.dp)
         ) {
-            Text(
-                text = media.title,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(8.dp)
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (media.posterUri != null) {
+                    AsyncImage(
+                        model = media.posterUri,
+                        contentDescription = media.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF333333)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "▶", color = Color.White, fontSize = 28.sp)
+                    }
+                }
+
+                // Badge de tipo
+                Surface(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(bottomEnd = 6.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = if (media.isMovie) "PELÍCULA" else "${media.seasons.size} TEMP",
+                        color = if (media.isMovie) Color(0xFFE50914) else Color(0xFF00D277),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = media.title,
+            color = Color.LightGray,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
