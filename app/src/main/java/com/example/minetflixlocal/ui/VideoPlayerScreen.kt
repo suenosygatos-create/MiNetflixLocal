@@ -5,7 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,7 +52,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Actualizador de tiempo del reproductor
     LaunchedEffect(mediaPlayer) {
         while (true) {
             if (mediaPlayer.isPlaying) {
@@ -80,7 +83,7 @@ fun VideoPlayerScreen(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.4f))
             ) {
-                // Barra superior
+                // Barra Superior
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -93,7 +96,7 @@ fun VideoPlayerScreen(
                     Text(text = title, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
 
-                // Controles Centrales (Retroceder 10s / Play-Pause / Adelantar 10s)
+                // Controles Centrales (-10s / Play-Pause / +10s)
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(32.dp),
@@ -125,7 +128,7 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Barra de Progreso Inferior (SeekBar)
+                // Barra de Progreso Inferior
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
