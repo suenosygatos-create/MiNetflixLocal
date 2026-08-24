@@ -324,3 +324,17 @@ fun NextEpisodeOverlay(
         }
     }
 }
+// Ejemplo al salir o pausar el reproductor:
+DisposableEffect(Unit) {
+    onDispose {
+        activeProfile?.id?.let { profileId ->
+            progressManager.saveProgress(
+                profileId = profileId,
+                mediaId = media.id,
+                episodeId = currentEpisode.id,
+                positionMs = exoPlayer.currentPosition,
+                totalDurationMs = exoPlayer.duration
+            )
+        }
+    }
+}
