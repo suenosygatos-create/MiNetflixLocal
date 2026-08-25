@@ -195,7 +195,7 @@ fun VlcVideoPlayer(
 ) {
     val context = LocalContext.current
     val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames")) }
-    val mediaPlayer = remember(videoUriString) { MediaPlayer(libVLC) }
+    val mediaPlayer = remember { MediaPlayer(libVLC) }
 
     var isPlaying by remember(videoUriString) { mutableStateOf(true) }
     var currentTimeMs by remember(videoUriString) { mutableStateOf(0L) }
@@ -209,7 +209,8 @@ fun VlcVideoPlayer(
         }
     }
 
-    DisposableEffect(videoUriString) {
+    // Actualizar el medio del reproductor cuando cambia la URI sin recrear el objeto MediaPlayer entero
+    LaunchedEffect(videoUriString) {
         val uri = Uri.parse(videoUriString)
         val media = if (uri.scheme == "content") {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
@@ -221,6 +222,11 @@ fun VlcVideoPlayer(
         mediaPlayer.media = media
         media.release()
 
+        mediaPlayer.play()
+        if (startPositionMs > 0) mediaPlayer.time = startPositionMs
+    }
+
+    DisposableEffect(libVLC) {
         val mainHandler = Handler(Looper.getMainLooper())
 
         mediaPlayer.setEventListener { event ->
@@ -233,9 +239,6 @@ fun VlcVideoPlayer(
                 }
             }
         }
-
-        mediaPlayer.play()
-        if (startPositionMs > 0) mediaPlayer.time = startPositionMs
 
         onDispose {
             onProgressUpdate(mediaPlayer.time, mediaPlayer.length)
@@ -274,6 +277,11 @@ fun VlcVideoPlayer(
             factory = { ctx ->
                 VLCVideoLayout(ctx).apply {
                     mediaPlayer.attachViews(this, null, false, false)
+                }
+            },
+            update = { vlcLayout ->
+                if (!mediaPlayer.vlcVout.areViewsAttached()) {
+                    mediaPlayer.attachViews(vlcLayout, null, false, false)
                 }
             },
             modifier = Modifier.fillMaxSize()
