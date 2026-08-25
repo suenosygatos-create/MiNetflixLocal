@@ -6,65 +6,57 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object ProfilePreferences {
-    private const val PREF_NAME = "netflix_profiles_pref"
-    private const val KEY_PROFILES = "user_profiles_list"
+    private const val PREFS_NAME = "user_profiles_prefs"
+    private const val KEY_PROFILES = "profiles_json"
 
-    // Obtener la lista de perfiles guardados (o devolver predeterminados)
     fun getProfiles(context: Context): List<UserProfile> {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        val jsonString = prefs.getString(KEY_PROFILES, null) ?: return getInitialProfiles()
-
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val jsonString = prefs.getString(KEY_PROFILES, null) ?: return getDefaultProfiles()
         return try {
-            val jsonArray = JSONArray(jsonString)
+            val array = JSONArray(jsonString)
             val list = mutableListOf<UserProfile>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
                 list.add(
                     UserProfile(
                         id = obj.getString("id"),
                         name = obj.getString("name"),
-                        avatarUrl = obj.optString("avatarUrl", "")
+                        avatarResId = obj.optInt("avatarResId", 0)
                     )
                 )
             }
-            if (list.isEmpty()) getInitialProfiles() else list
+            list.ifEmpty { getDefaultProfiles() }
         } catch (e: Exception) {
-            getInitialProfiles()
+            getDefaultProfiles()
         }
     }
 
-    // Agregar un nuevo perfil y guardarlo
-    fun addProfile(context: Context, name: String): UserProfile {
-        val currentProfiles = getProfiles(context).toMutableList()
-        val newProfile = UserProfile(
-            id = "user_${System.currentTimeMillis()}",
-            name = name,
-            avatarUrl = ""
-        )
-        currentProfiles.add(newProfile)
-        saveProfiles(context, currentProfiles)
-        return newProfile
-    }
-
-    private fun saveProfiles(context: Context, profiles: List<UserProfile>) {
-        val jsonArray = JSONArray()
+    fun saveProfiles(context: Context, profiles: List<UserProfile>) {
+        val array = JSONArray()
         profiles.forEach { profile ->
             val obj = JSONObject().apply {
                 put("id", profile.id)
                 put("name", profile.name)
-                put("avatarUrl", profile.avatarUrl)
+                put("avatarResId", profile.avatarResId)
             }
-            jsonArray.put(obj)
+            array.put(obj)
         }
-        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_PROFILES, jsonArray.toString())
+            .putString(KEY_PROFILES, array.toString())
             .apply()
     }
 
-    private fun getInitialProfiles(): List<UserProfile> {
+    fun addProfile(context: Context, profile: UserProfile) {
+        val current = getProfiles(context).toMutableList()
+        current.add(profile)
+        saveProfiles(context, current)
+    }
+
+    private fun getDefaultProfiles(): List<UserProfile> {
         return listOf(
-            UserProfile(id = "1", name = "Principal", avatarUrl = "")
+            UserProfile("1", "Usuario 1", 0),
+            UserProfile("2", "Niños", 0)
         )
     }
 }
