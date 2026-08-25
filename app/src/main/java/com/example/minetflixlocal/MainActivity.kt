@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -13,8 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -25,7 +24,7 @@ import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme
 import com.example.minetflixlocal.util.LocalVideo
-import com.example.minetflixlocal.util.MediaFolder
+import com.example.minetflixlocal.util.VideoPreferences
 import com.example.minetflixlocal.util.VideoScanner
 import com.example.minetflixlocal.util.WatchProgress
 import com.example.minetflixlocal.util.WatchProgressManager
@@ -42,6 +41,16 @@ class MainActivity : ComponentActivity() {
                     MainApp()
                 }
             }
+        }
+    }
+
+    // Intercepción de teclas físicas (TV Remote / D-Pad / Botones del teléfono)
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> super.onKeyDown(keyCode, event)
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            KeyEvent.KEYCODE_HEADSETHOOK -> true
+            else -> super.onKeyDown(keyCode, event)
         }
     }
 }
@@ -77,7 +86,6 @@ fun MainApp() {
     // Estado para los IDs ocultos
     var hiddenIds by remember { mutableStateOf(VideoPreferences.getHiddenVideoIds(context)) }
 
-    // Función auxiliar para refrescar el estado al ocultar un video
     val onHideVideo: (String) -> Unit = { videoId ->
         VideoPreferences.hideVideo(context, videoId)
         hiddenIds = VideoPreferences.getHiddenVideoIds(context)
@@ -113,17 +121,17 @@ fun MainApp() {
         }
     }
 
-    // Filtrar videos antes de agrupar
+    // Filtrar videos ocultos
     val visibleVideos = remember(scannedVideos, hiddenIds) {
         scannedVideos.filter { video -> video.id.toString() !in hiddenIds }
     }
 
-    // Usar 'visibleVideos' en lugar de 'scannedVideos'
+    // Agrupar videos
     val (seriesFolders, singleMovies) = remember(visibleVideos) {
         videoScanner.groupVideosByFolder(visibleVideos)
     }
 
-    // Convertir series (carpetas con múltiples videos) a MediaSeries
+    // Convertir series
     val seriesList = remember(seriesFolders) {
         seriesFolders.map { folder ->
             val seasons = folder.videos
@@ -145,7 +153,7 @@ fun MainApp() {
             MediaSeries(
                 id = folder.id,
                 title = folder.name,
-                seasons = if (seasons.isEmpty()) {
+                seasons = seasons.ifEmpty {
                     listOf(
                         Season(
                             seasonNumber = 1,
@@ -159,14 +167,12 @@ fun MainApp() {
                             }
                         )
                     )
-                } else {
-                    seasons
                 }
             )
         }
     }
 
-    // Convertir películas individuales a MediaSeries
+    // Convertir películas individuales
     val moviesList = remember(singleMovies) {
         singleMovies.map { movie ->
             val episode = Episode(
@@ -186,6 +192,22 @@ fun MainApp() {
                 isMovie = true
             )
         }
+    }
+
+    // Cálculo del siguiente episodio para la pantalla de reproducción
+    val currentSeries = remember(seriesList, playingMediaId) {
+        seriesList.find { it.id == playingMediaId }
+    }
+    val allEpisodes = remember(currentSeries) {
+        currentSeries?.seasons?.flatMap { it.episodes } ?: emptyList()
+    }
+    val currentEpisodeIndex = remember(allEpisodes, playingEpisodeId) {
+        allEpisodes.indexOfFirst { it.id == playingEpisodeId }
+    }
+    val nextEpisode = remember(allEpisodes, currentEpisodeIndex, isMovie) {
+        if (!isMovie && currentEpisodeIndex != -1 && currentEpisodeIndex + 1 < allEpisodes.size) {
+            allEpisodes[currentEpisodeIndex + 1]
+        } else null
     }
 
     when (currentScreen) {
@@ -261,6 +283,16 @@ fun MainApp() {
                     title = playingTitle,
                     engine = selectedEngine,
                     startPositionMs = playingStartPos,
+                    nextEpisodeTitle = nextEpisode?.title,
+                    nextEpisodePosterUri = nextEpisode?.videoPath?.let { Uri.parse(it) },
+                    onNextEpisode = nextEpisode?.let { nextEp ->
+                        {
+                            playingUri = nextEp.videoPath
+                            playingTitle = nextEp.title
+                            playingEpisodeId = nextEp.id
+                            playingStartPos = 0L
+                        }
+                    },
                     onProgressUpdate = { currentPos, duration ->
                         activeProfile?.let { profile ->
                             progressManager.saveProgress(
