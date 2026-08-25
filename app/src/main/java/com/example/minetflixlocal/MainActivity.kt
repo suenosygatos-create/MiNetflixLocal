@@ -69,6 +69,18 @@ fun MainApp() {
     val videoScanner = remember { VideoScanner(context) }
 
     var currentScreen by remember { mutableStateOf(Screen.PROFILE_SELECTION) }
+    
+    // Lista de perfiles con soporte para avatares personalizados
+    var profiles by remember {
+        mutableStateOf(
+            listOf(
+                UserProfile(id = "1", name = "Familia", avatarIcon = "🏰"),
+                UserProfile(id = "2", name = "Niños", avatarIcon = "🐭"),
+                UserProfile(id = "3", name = "Invitado", avatarIcon = "⭐")
+            )
+        )
+    }
+    
     var activeProfile by remember { mutableStateOf<UserProfile?>(null) }
     var selectedEngine by remember { mutableStateOf("EXOPLAYER") }
 
@@ -213,6 +225,7 @@ fun MainApp() {
     when (currentScreen) {
         Screen.PROFILE_SELECTION -> {
             ProfileSelectionScreen(
+                profiles = profiles,
                 onProfileSelected = { profile ->
                     activeProfile = profile
                     currentScreen = Screen.HOME
@@ -265,14 +278,23 @@ fun MainApp() {
             SettingsScreen(
                 selectedEngine = selectedEngine,
                 onEngineChanged = { engine -> selectedEngine = engine },
+                profiles = profiles,
+                activeProfile = activeProfile,
+                onProfileSelected = { profile ->
+                    activeProfile = profile
+                },
+                onUpdateProfileAvatar = { profileId, uri ->
+                    profiles = profiles.map { p ->
+                        if (p.id == profileId) p.copy(avatarUri = uri?.toString()) else p
+                    }
+                    if (activeProfile?.id == profileId) {
+                        activeProfile = activeProfile?.copy(avatarUri = uri?.toString())
+                    }
+                },
                 onRescan = {
                     scannedVideos = videoScanner.scanVideos()
                 },
-                onBack = { currentScreen = Screen.HOME },
-                onChangeProfile = {
-                    activeProfile = null
-                    currentScreen = Screen.PROFILE_SELECTION
-                }
+                onBack = { currentScreen = Screen.HOME }
             )
         }
 
