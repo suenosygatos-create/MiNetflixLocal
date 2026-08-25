@@ -24,6 +24,7 @@ import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme
 import com.example.minetflixlocal.util.LocalVideo
+import com.example.minetflixlocal.util.ProfileManager
 import com.example.minetflixlocal.util.VideoPreferences
 import com.example.minetflixlocal.util.VideoScanner
 import com.example.minetflixlocal.util.WatchProgress
@@ -70,15 +71,9 @@ fun MainApp() {
 
     var currentScreen by remember { mutableStateOf(Screen.PROFILE_SELECTION) }
     
-    // Lista de perfiles con soporte para avatares personalizados
+    // Cargar y guardar perfiles mediante ProfileManager
     var profiles by remember {
-        mutableStateOf(
-            listOf(
-                UserProfile(id = "1", name = "Familia", avatarIcon = "🏰"),
-                UserProfile(id = "2", name = "Niños", avatarIcon = "🐭"),
-                UserProfile(id = "3", name = "Invitado", avatarIcon = "⭐")
-            )
-        )
+        mutableStateOf(ProfileManager.loadProfiles(context))
     }
     
     var activeProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -225,7 +220,6 @@ fun MainApp() {
     when (currentScreen) {
         Screen.PROFILE_SELECTION -> {
             ProfileSelectionScreen(
-                profiles = profiles,
                 onProfileSelected = { profile ->
                     activeProfile = profile
                     currentScreen = Screen.HOME
@@ -287,6 +281,7 @@ fun MainApp() {
                     profiles = profiles.map { p ->
                         if (p.id == profileId) p.copy(avatarUri = uri?.toString()) else p
                     }
+                    ProfileManager.saveProfiles(context, profiles)
                     if (activeProfile?.id == profileId) {
                         activeProfile = activeProfile?.copy(avatarUri = uri?.toString())
                     }
