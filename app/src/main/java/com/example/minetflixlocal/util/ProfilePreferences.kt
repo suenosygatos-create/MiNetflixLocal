@@ -1,4 +1,4 @@
-package com.example.minetflixlocal
+package com.example.minetflixlocal.util
 
 import android.content.Context
 import com.example.minetflixlocal.model.UserProfile
