@@ -48,7 +48,7 @@ fun HomeScreen(
     onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit,
     onHideMedia: (String) -> Unit,
-    onUpdateMediaPoster: (String, Uri) -> Unit
+    onUpdateMediaPoster: (String, Uri) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
@@ -56,7 +56,7 @@ fun HomeScreen(
     var selectedSeriesForDetails by remember { mutableStateOf<MediaSeries?>(null) }
     var selectedMediaIdForPoster by remember { mutableStateOf<String?>(null) }
 
-    // Selector para abrir la galería del dispositivo y obtener permisos persistentes de lectura
+    // Selector para abrir la galería del dispositivo y obtener permisos persistentes
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -67,7 +67,7 @@ fun HomeScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: Exception) {
-                // Continuará usando la Uri en caso de que el proveedor no requiera permiso persistente
+                // No action needed
             }
             selectedMediaIdForPoster?.let { mediaId ->
                 onUpdateMediaPoster(mediaId, selectedUri)
@@ -294,7 +294,7 @@ fun HomeScreen(
                 ) {
                     LazyColumn {
                         series.seasons.forEach { season ->
-                            item(key = "season_${season.id}") {
+                            item {
                                 Text(
                                     text = season.title,
                                     color = Color(0xFFFF3366),
@@ -303,10 +303,7 @@ fun HomeScreen(
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
                             }
-                            items(
-                                items = season.episodes,
-                                key = { "ep_${it.id}" }
-                            ) { episode ->
+                            items(season.episodes) { episode ->
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
