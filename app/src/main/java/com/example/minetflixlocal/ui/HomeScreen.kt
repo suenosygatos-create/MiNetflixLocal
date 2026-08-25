@@ -1,5 +1,9 @@
 package com.example.minetflixlocal.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -37,7 +41,7 @@ fun HomeScreen(
     continueWatchingMap: Map<String, WatchProgress>,
     onMediaSelected: (MediaSeries) -> Unit,
     onResumePlayback: (MediaSeries, String) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
     onHideMedia: (String) -> Unit //
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -162,7 +166,8 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Recomendados para ti",
                         items = recommendedList,
-                        onMediaSelected = onMediaSelected
+                        onMediaSelected = onMediaSelected,
+                        onHideMedia = onHideMedia
                     )
                 }
             }
@@ -173,7 +178,8 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Películas",
                         items = filteredMovies,
-                        onMediaSelected = onMediaSelected
+                        onMediaSelected = onMediaSelected,
+                        onHideMedia = onHideMedia
                     )
                 }
             }
@@ -184,7 +190,8 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Series de TV",
                         items = filteredSeries,
-                        onMediaSelected = onMediaSelected
+                        onMediaSelected = onMediaSelected,
+                        onHideMedia = onHideMedia
                     )
                 }
             }
@@ -253,7 +260,7 @@ fun ContinueWatchingCard(
 fun MediaSectionRow(
     title: String,
     items: List<MediaSeries>,
-    onMediaSelected: (MediaSeries) -> Unit
+    onMediaSelected: (MediaSeries) -> Unit,
     onHideMedia: (String) -> Unit //
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
