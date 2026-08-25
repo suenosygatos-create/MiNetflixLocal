@@ -102,22 +102,20 @@ fun MainApp() {
     // Adaptar los videos del celular a la estructura de la app
     val mediaList = remember(scannedVideos) {
         scannedVideos.map { video ->
+            val episode = Episode(
+                id = video.id.toString(),
+                title = video.title,
+                videoPath = video.uri.toString()
+            )
+            val season = Season(
+                seasonNumber = 1,
+                title = video.title,
+                episodes = listOf(episode)
+            )
             MediaSeries(
                 id = video.id.toString(),
                 title = video.title,
-                seasons = listOf(
-                    Season(
-                        seasonNumber = 1,
-                        title = video.title,
-                        episodes = listOf(
-                            Episode(
-                                id = video.id.toString(),
-                                title = video.title,
-                                videoPath = video.uri.toString()
-                            )
-                        )
-                    )
-                )
+                seasons = listOf(season)
             )
         }
     }
@@ -139,7 +137,8 @@ fun MainApp() {
                 moviesList = emptyList(),
                 continueWatchingMap = currentProfileProgress,
                 onMediaSelected = { media ->
-                    val ep = media.seasons.firstOrNull()?.episodes?.firstOrNull()
+                    val season = media.seasons.firstOrNull()
+                    val ep = season?.episodes?.firstOrNull()
                     if (ep != null) {
                         playingUri = ep.videoPath
                         playingTitle = ep.title
@@ -150,7 +149,7 @@ fun MainApp() {
                     }
                 },
                 onResumePlayback = { media, episodeId ->
-                    val ep = media.seasons.flatMap { it.episodes }.find { it.id == episodeId } 
+                    val ep = media.seasons.flatMap { it.episodes }.find { it.id == episodeId }
                         ?: media.seasons.firstOrNull()?.episodes?.firstOrNull()
                     if (ep != null) {
                         playingUri = ep.videoPath
