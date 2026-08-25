@@ -71,28 +71,30 @@ fun VideoPlayerScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        if (engine == "VLC") {
-            VlcVideoPlayer(
-                videoUriString = videoUriString,
-                title = title,
-                startPositionMs = startPositionMs,
-                onProgressUpdate = onProgressUpdate,
-                onBack = onBack,
-                onVideoEnded = {
-                    if (onNextEpisode != null) showNextOverlay = true else onBack()
-                }
-            )
-        } else {
-            ExoVideoPlayer(
-                videoUriString = videoUriString,
-                title = title,
-                startPositionMs = startPositionMs,
-                onProgressUpdate = onProgressUpdate,
-                onBack = onBack,
-                onVideoEnded = {
-                    if (onNextEpisode != null) showNextOverlay = true else onBack()
-                }
-            )
+        if (videoUriString.isNotEmpty()) {
+            if (engine == "VLC") {
+                VlcVideoPlayer(
+                    videoUriString = videoUriString,
+                    title = title,
+                    startPositionMs = startPositionMs,
+                    onProgressUpdate = onProgressUpdate,
+                    onBack = onBack,
+                    onVideoEnded = {
+                        if (onNextEpisode != null) showNextOverlay = true else onBack()
+                    }
+                )
+            } else {
+                ExoVideoPlayer(
+                    videoUriString = videoUriString,
+                    title = title,
+                    startPositionMs = startPositionMs,
+                    onProgressUpdate = onProgressUpdate,
+                    onBack = onBack,
+                    onVideoEnded = {
+                        if (onNextEpisode != null) showNextOverlay = true else onBack()
+                    }
+                )
+            }
         }
 
         if (showNextOverlay && onNextEpisode != null) {
@@ -128,7 +130,12 @@ fun ExoVideoPlayer(
         }
     }
 
-    LaunchedEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer, videoUriString) {
+        exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(videoUriString)))
+        exoPlayer.prepare()
+        if (startPositionMs > 0) exoPlayer.seekTo(startPositionMs)
+        exoPlayer.playWhenReady = true
+
         while (true) {
             if (exoPlayer.isPlaying) {
                 onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
@@ -147,7 +154,9 @@ fun ExoVideoPlayer(
         }
         exoPlayer.addListener(listener)
         onDispose {
-            onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
+            if (exoPlayer.playbackState != Player.STATE_IDLE) {
+                onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
+            }
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
