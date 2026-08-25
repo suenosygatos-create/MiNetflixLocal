@@ -16,8 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.example.minetflixlocal.model.MediaEpisode
-import com.example.minetflixlocal.model.MediaSeason
+import com.example.minetflixlocal.model.Episode
+import com.example.minetflixlocal.model.Season
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
@@ -106,15 +106,14 @@ fun MainApp() {
                 id = video.id.toString(),
                 title = video.title,
                 seasons = listOf(
-                    MediaSeason(
-                        id = "season_1",
+                    Season(
                         seasonNumber = 1,
+                        title = video.title,
                         episodes = listOf(
-                            MediaEpisode(
+                            Episode(
                                 id = video.id.toString(),
                                 title = video.title,
-                                episodeNumber = 1,
-                                videoUri = Uri.parse(video.uri.toString())
+                                videoPath = video.uri.toString()
                             )
                         )
                     )
@@ -140,9 +139,9 @@ fun MainApp() {
                 moviesList = emptyList(),
                 continueWatchingMap = currentProfileProgress,
                 onMediaSelected = { media ->
-                    val ep = media.episodes.firstOrNull()
+                    val ep = media.seasons.firstOrNull()?.episodes?.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri.toString()
+                        playingUri = ep.videoPath
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
@@ -151,9 +150,10 @@ fun MainApp() {
                     }
                 },
                 onResumePlayback = { media, episodeId ->
-                    val ep = media.episodes.find { it.id == episodeId } ?: media.episodes.firstOrNull()
+                    val ep = media.seasons.flatMap { it.episodes }.find { it.id == episodeId } 
+                        ?: media.seasons.firstOrNull()?.episodes?.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri.toString()
+                        playingUri = ep.videoPath
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
