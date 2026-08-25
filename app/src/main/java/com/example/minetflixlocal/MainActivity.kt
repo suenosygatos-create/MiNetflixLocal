@@ -133,7 +133,7 @@ fun MainApp() {
                 onMediaSelected = { media ->
                     val ep = media.episodes.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri.toString()
+                        playingUri = ep.videoUri
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
@@ -144,7 +144,7 @@ fun MainApp() {
                 onResumePlayback = { media, episodeId ->
                     val ep = media.episodes.find { it.id == episodeId } ?: media.episodes.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri.toString()
+                        playingUri = ep.videoUri
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
@@ -174,9 +174,9 @@ fun MainApp() {
         }
 
         Screen.PLAYER -> {
-            playingUri?.let { uriStr ->
+            if (playingUri != null && activeProfile != null) {
                 VideoPlayerScreen(
-                    videoUriString = uriStr,
+                    videoUriString = playingUri!!,
                     title = playingTitle,
                     engine = selectedEngine,
                     startPositionMs = playingStartPos,
@@ -198,7 +198,7 @@ fun MainApp() {
                         currentScreen = Screen.HOME
                     }
                 )
-            } ?: run {
+            } else {
                 currentScreen = Screen.HOME
             }
         }
