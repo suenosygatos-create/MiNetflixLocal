@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,11 @@ fun ProfileScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF141414)),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0F0F1A), Color(0xFF050508))
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -62,7 +67,7 @@ fun ProfileScreen(
             }
         }
 
-        // Modal para editar nombre e icono Disney
+        // Modal para editar nombre e icono
         editingProfile?.let { profile ->
             EditProfileDialog(
                 profile = profile,
@@ -86,8 +91,9 @@ fun ProfileCard(
         Box(
             modifier = Modifier
                 .size(110.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(Color(profile.colorHex))
+                .border(2.dp, Color(0xFF2B2B36), RoundedCornerShape(20.dp))
                 .clickable { onSelect() },
             contentAlignment = Alignment.Center
         ) {
@@ -101,13 +107,18 @@ fun ProfileCard(
                     .padding(4.dp)
                     .background(Color.Black.copy(alpha = 0.6f), CircleShape)
             ) {
-                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Editar",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = profile.name,
-            color = Color.LightGray,
+            color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium
         )
@@ -125,7 +136,7 @@ fun EditProfileDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF222222),
+        containerColor = Color(0xFF1F1F2C),
         title = { Text("Editar Perfil", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column {
@@ -134,29 +145,36 @@ fun EditProfileDialog(
                     onValueChange = { name = it },
                     label = { Text("Nombre de usuario", color = Color.Gray) },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFE50914),
-                        unfocusedBorderColor = Color.Gray,
+                        focusedBorderColor = Color(0xFFFF3366),
+                        unfocusedBorderColor = Color(0xFF333344),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Elige un icono estilo Disney:", color = Color.LightGray, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(8.dp))
+                Text("Elige tu icono de avatar:", color = Color.LightGray, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(10.dp))
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(5),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.height(150.dp)
+                    modifier = Modifier.height(160.dp)
                 ) {
                     items(DISNEY_AVATARS) { (icon, _) ->
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(if (selectedIcon == icon) Color(0xFFE50914) else Color(0xFF333333))
+                                .background(
+                                    if (selectedIcon == icon) Color(0xFFFF3366) else Color(0xFF2B2B36)
+                                )
+                                .border(
+                                    width = if (selectedIcon == icon) 2.dp else 0.dp,
+                                    color = Color.White,
+                                    shape = CircleShape
+                                )
                                 .clickable { selectedIcon = icon },
                             contentAlignment = Alignment.Center
                         ) {
@@ -169,14 +187,14 @@ fun EditProfileDialog(
         confirmButton = {
             Button(
                 onClick = { onSave(profile.copy(name = name, avatarIcon = selectedIcon)) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3366))
             ) {
-                Text("Guardar")
+                Text("Guardar", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color.White)
+                Text("Cancelar", color = Color.Gray)
             }
         }
     )
