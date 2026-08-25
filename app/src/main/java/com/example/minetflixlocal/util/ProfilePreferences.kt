@@ -21,7 +21,7 @@ object ProfilePreferences {
                     UserProfile(
                         id = obj.getString("id"),
                         name = obj.getString("name"),
-                        avatarResId = obj.optInt("avatarResId", 0)
+                        avatarIcon = obj.optString("avatarIcon", "👤")
                     )
                 )
             }
@@ -37,7 +37,7 @@ object ProfilePreferences {
             val obj = JSONObject().apply {
                 put("id", profile.id)
                 put("name", profile.name)
-                put("avatarResId", profile.avatarResId)
+                put("avatarIcon", profile.avatarIcon)
             }
             array.put(obj)
         }
@@ -55,8 +55,8 @@ object ProfilePreferences {
 
     private fun getDefaultProfiles(): List<UserProfile> {
         return listOf(
-            UserProfile("1", "Usuario 1", 0),
-            UserProfile("2", "Niños", 0)
+            UserProfile("1", "Principal", "👤"),
+            UserProfile("2", "Niños", "👶")
         )
     }
 }
