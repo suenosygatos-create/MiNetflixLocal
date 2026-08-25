@@ -231,6 +231,7 @@ val (seriesFolders, singleMovies) = remember(visibleVideos) {
                 },
                 onOpenSettings = {
                     currentScreen = Screen.SETTINGS
+                    onHideMedia = { mediaId -> onHideVideo(mediaId) }
                 }
             )
         }
