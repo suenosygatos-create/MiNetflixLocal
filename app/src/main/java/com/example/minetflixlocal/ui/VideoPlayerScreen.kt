@@ -6,6 +6,7 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,6 +32,7 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
+import java.util.Locale
 
 @Composable
 fun VideoPlayerScreen(
@@ -115,7 +117,7 @@ fun ExoVideoPlayer(
             if (exoPlayer.isPlaying) {
                 onProgressUpdate(exoPlayer.currentPosition, exoPlayer.duration.coerceAtLeast(0L))
             }
-            delay(3000)
+            delay(1000)
         }
     }
 
@@ -167,6 +169,19 @@ fun VlcVideoPlayer(
     val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames")) }
     val mediaPlayer = remember { MediaPlayer(libVLC) }
 
+    var isPlaying by remember { mutableStateOf(true) }
+    var currentTimeMs by remember { mutableStateOf(0L) }
+    var totalDurationMs by remember { mutableStateOf(0L) }
+    var showControls by remember { mutableStateOf(true) }
+
+    // Oculta los controles automáticamente tras 4 segundos
+    LaunchedEffect(showControls, isPlaying) {
+        if (showControls && isPlaying) {
+            delay(4000)
+            showControls = false
+        }
+    }
+
     DisposableEffect(Unit) {
         val uri = Uri.parse(videoUriString)
         val media = if (uri.scheme == "content") {
@@ -180,8 +195,11 @@ fun VlcVideoPlayer(
         media.release()
 
         mediaPlayer.setEventListener { event ->
-            if (event.type == MediaPlayer.Event.EndReached) {
-                onVideoEnded()
+            when (event.type) {
+                MediaPlayer.Event.EndReached -> onVideoEnded()
+                MediaPlayer.Event.Playing -> isPlaying = true
+                MediaPlayer.Event.Paused -> isPlaying = false
+                MediaPlayer.Event.Stopped -> isPlaying = false
             }
         }
 
@@ -199,13 +217,20 @@ fun VlcVideoPlayer(
     LaunchedEffect(mediaPlayer) {
         while (true) {
             if (mediaPlayer.isPlaying) {
-                onProgressUpdate(mediaPlayer.time, mediaPlayer.length)
+                currentTimeMs = mediaPlayer.time
+                totalDurationMs = mediaPlayer.length
+                onProgressUpdate(currentTimeMs, totalDurationMs)
             }
-            delay(3000)
+            delay(500)
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable { showControls = !showControls }
+    ) {
         AndroidView(
             factory = { ctx ->
                 VLCVideoLayout(ctx).apply {
@@ -214,11 +239,152 @@ fun VlcVideoPlayer(
             },
             modifier = Modifier.fillMaxSize()
         )
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.padding(16.dp).align(Alignment.TopStart)
+
+        if (showControls) {
+            PlayerControlsOverlay(
+                title = title,
+                isPlaying = isPlaying,
+                currentTimeMs = currentTimeMs,
+                totalDurationMs = totalDurationMs,
+                onPlayPauseToggle = {
+                    if (mediaPlayer.isPlaying) {
+                        mediaPlayer.pause()
+                        isPlaying = false
+                    } else {
+                        mediaPlayer.play()
+                        isPlaying = true
+                    }
+                },
+                onRewind = {
+                    val newTime = (mediaPlayer.time - 10000).coerceAtLeast(0)
+                    mediaPlayer.time = newTime
+                    currentTimeMs = newTime
+                },
+                onForward = {
+                    val newTime = (mediaPlayer.time + 10000).coerceAtMost(mediaPlayer.length)
+                    mediaPlayer.time = newTime
+                    currentTimeMs = newTime
+                },
+                onSeek = { newPosition ->
+                    mediaPlayer.time = newPosition
+                    currentTimeMs = newPosition
+                },
+                onBack = onBack
+            )
+        }
+    }
+}
+
+@Composable
+fun PlayerControlsOverlay(
+    title: String,
+    isPlaying: Boolean,
+    currentTimeMs: Long,
+    totalDurationMs: Long,
+    onPlayPauseToggle: () -> Unit,
+    onRewind: () -> Unit,
+    onForward: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .padding(16.dp)
+    ) {
+        // Superior: Título y Volver
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopStart)
         ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+
+        // Centro: Controles de reproducción (-10s, Play/Pausa, +10s)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+        ) {
+            IconButton(onClick = onRewind, modifier = Modifier.size(56.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Replay10,
+                    contentDescription = "Retroceder 10s",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(32.dp))
+
+            IconButton(
+                onClick = onPlayPauseToggle,
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(Color(0xFFE50914), CircleShape)
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                    tint = Color.White,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(32.dp))
+
+            IconButton(onClick = onForward, modifier = Modifier.size(56.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Forward10,
+                    contentDescription = "Adelantar 10s",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        }
+
+        // Inferior: Tiempos y SeekBar
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = formatTime(currentTimeMs), color = Color.White, fontSize = 12.sp)
+                Text(text = formatTime(totalDurationMs), color = Color.White, fontSize = 12.sp)
+            }
+
+            Slider(
+                value = if (totalDurationMs > 0) currentTimeMs.toFloat() / totalDurationMs.toFloat() else 0f,
+                onValueChange = { fraction ->
+                    val newTime = (fraction * totalDurationMs).toLong()
+                    onSeek(newTime)
+                },
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFE50914),
+                    activeTrackColor = Color(0xFFE50914),
+                    inactiveTrackColor = Color.Gray
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -230,7 +396,7 @@ fun NextEpisodeOverlay(
     onPlayNow: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var secondsLeft by remember { mutableIntStateOf(10) }
+    var secondsLeft by remember { mutableStateOf(10) }
 
     LaunchedEffect(secondsLeft) {
         if (secondsLeft > 0) {
@@ -323,5 +489,17 @@ fun NextEpisodeOverlay(
                 }
             }
         }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    val hours = minutes / 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes % 60, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
