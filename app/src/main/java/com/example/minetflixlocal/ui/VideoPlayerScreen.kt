@@ -2,6 +2,8 @@ package com.example.minetflixlocal.ui
 
 import android.app.Activity
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +51,10 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     var showNextOverlay by remember { mutableStateOf(false) }
 
+    LaunchedEffect(videoUriString) {
+        showNextOverlay = false
+    }
+
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -86,7 +92,10 @@ fun VideoPlayerScreen(
             NextEpisodeOverlay(
                 nextTitle = nextEpisodeTitle ?: "Siguiente episodio",
                 posterUri = nextEpisodePosterUri,
-                onPlayNow = onNextEpisode,
+                onPlayNow = {
+                    showNextOverlay = false
+                    onNextEpisode()
+                },
                 onCancel = onBack
             )
         }
@@ -103,7 +112,7 @@ fun ExoVideoPlayer(
     onVideoEnded: () -> Unit
 ) {
     val context = LocalContext.current
-    val exoPlayer = remember {
+    val exoPlayer = remember(videoUriString) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(Uri.parse(videoUriString)))
             prepare()
@@ -145,6 +154,9 @@ fun ExoVideoPlayer(
                     useController = true
                 }
             },
+            update = { playerView ->
+                playerView.player = exoPlayer
+            },
             modifier = Modifier.fillMaxSize()
         )
         IconButton(
@@ -167,14 +179,13 @@ fun VlcVideoPlayer(
 ) {
     val context = LocalContext.current
     val libVLC = remember { LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames")) }
-    val mediaPlayer = remember { MediaPlayer(libVLC) }
+    val mediaPlayer = remember(videoUriString) { MediaPlayer(libVLC) }
 
-    var isPlaying by remember { mutableStateOf(true) }
-    var currentTimeMs by remember { mutableStateOf(0L) }
-    var totalDurationMs by remember { mutableStateOf(0L) }
-    var showControls by remember { mutableStateOf(true) }
+    var isPlaying by remember(videoUriString) { mutableStateOf(true) }
+    var currentTimeMs by remember(videoUriString) { mutableStateOf(0L) }
+    var totalDurationMs by remember(videoUriString) { mutableStateOf(0L) }
+    var showControls by remember(videoUriString) { mutableStateOf(true) }
 
-    // Oculta los controles automáticamente tras 4 segundos
     LaunchedEffect(showControls, isPlaying) {
         if (showControls && isPlaying) {
             delay(4000)
@@ -182,7 +193,7 @@ fun VlcVideoPlayer(
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(videoUriString) {
         val uri = Uri.parse(videoUriString)
         val media = if (uri.scheme == "content") {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
@@ -194,12 +205,16 @@ fun VlcVideoPlayer(
         mediaPlayer.media = media
         media.release()
 
+        val mainHandler = Handler(Looper.getMainLooper())
+
         mediaPlayer.setEventListener { event ->
-            when (event.type) {
-                MediaPlayer.Event.EndReached -> onVideoEnded()
-                MediaPlayer.Event.Playing -> isPlaying = true
-                MediaPlayer.Event.Paused -> isPlaying = false
-                MediaPlayer.Event.Stopped -> isPlaying = false
+            mainHandler.post {
+                when (event.type) {
+                    MediaPlayer.Event.EndReached -> onVideoEnded()
+                    MediaPlayer.Event.Playing -> isPlaying = true
+                    MediaPlayer.Event.Paused -> isPlaying = false
+                    MediaPlayer.Event.Stopped -> isPlaying = false
+                }
             }
         }
 
@@ -293,7 +308,6 @@ fun PlayerControlsOverlay(
             .background(Color.Black.copy(alpha = 0.5f))
             .padding(16.dp)
     ) {
-        // Superior: Título y Volver
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -313,7 +327,6 @@ fun PlayerControlsOverlay(
             )
         }
 
-        // Centro: Controles de reproducción (-10s, Play/Pausa, +10s)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -358,7 +371,6 @@ fun PlayerControlsOverlay(
             }
         }
 
-        // Inferior: Tiempos y SeekBar
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -422,7 +434,7 @@ fun NextEpisodeOverlay(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "El próximo episodio empieza en $secondsLeft s",
+                    text = "El próximo episodio empieza en ${secondsLeft}s",
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
