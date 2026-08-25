@@ -70,7 +70,17 @@ fun MainApp() {
     var playingStartPos by remember { mutableStateOf(0L) }
     var playingMediaId by remember { mutableStateOf("") }
     var playingEpisodeId by remember { mutableStateOf("") }
-    var isMovie by remember { mutableStateOf(false) }
+    var isMovie by remember { mutableStateOf(false) 
+    var scannedVideos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
+
+// 1. Guardar el estado de los IDs ocultos en memoria de Compose
+var hiddenIds by remember { mutableStateOf(VideoPreferences.getHiddenVideoIds(context)) }
+
+// 2. Función auxiliar para refrescar el estado cuando ocultes un video
+val onHideVideo: (String) -> Unit = { videoId ->
+    VideoPreferences.hideVideo(context, videoId)
+    hiddenIds = VideoPreferences.getHiddenVideoIds(context)
+    }
 
     // Solicitar permisos de almacenamiento
     val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -102,10 +112,15 @@ fun MainApp() {
         }
     }
 
-    // Agrupar videos en series y películas
-    val (seriesFolders, singleMovies) = remember(scannedVideos) {
-        videoScanner.groupVideosByFolder(scannedVideos)
-    }
+        // 3. Filtrar videos antes de agrupar
+val visibleVideos = remember(scannedVideos, hiddenIds) {
+    scannedVideos.filter { video -> video.id.toString() !in hiddenIds }
+}
+
+// 4. Usar 'visibleVideos' en lugar de 'scannedVideos'
+val (seriesFolders, singleMovies) = remember(visibleVideos) {
+    videoScanner.groupVideosByFolder(visibleVideos)
+}
 
     // Convertir series (carpetas con múltiples videos) a MediaSeries
     val seriesList = remember(seriesFolders) {
