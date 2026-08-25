@@ -1,5 +1,8 @@
 package com.example.minetflixlocal.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,37 +41,59 @@ fun HomeScreen(
     seriesList: List<MediaSeries>,
     moviesList: List<MediaSeries>,
     continueWatchingMap: Map<String, WatchProgress>,
+    hiddenMediaIds: Set<String> = emptySet(),
     onMediaSelected: (MediaSeries) -> Unit,
     onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit,
     onHideMedia: (String) -> Unit,
-    onChangePoster: (String) -> Unit = {}
+    onUpdateMediaPoster: (String, Uri) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var selectedSeriesForDetails by remember { mutableStateOf<MediaSeries?>(null) }
+    var selectedMediaIdForPoster by remember { mutableStateOf<String?>(null) }
 
-    val allMedia = remember(seriesList, moviesList) { seriesList + moviesList }
-
-    val filteredMovies = remember(searchQuery, moviesList) {
-        if (searchQuery.isBlank()) moviesList
-        else moviesList.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    // Selector para abrir la galería del dispositivo al cambiar la portada
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            selectedMediaIdForPoster?.let { mediaId ->
+                onUpdateMediaPoster(mediaId, selectedUri)
+            }
+        }
     }
 
-    val filteredSeries = remember(searchQuery, seriesList) {
-        if (searchQuery.isBlank()) seriesList
-        else seriesList.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    // Filtrar contenido descartando los elementos ocultos
+    val visibleMovies = remember(moviesList, hiddenMediaIds) {
+        moviesList.filterNot { it.id in hiddenMediaIds }
+    }
+    val visibleSeries = remember(seriesList, hiddenMediaIds) {
+        seriesList.filterNot { it.id in hiddenMediaIds }
+    }
+    val allVisibleMedia = remember(visibleSeries, visibleMovies) {
+        visibleSeries + visibleMovies
     }
 
-    val continueWatchingList = remember(continueWatchingMap, allMedia) {
+    val filteredMovies = remember(searchQuery, visibleMovies) {
+        if (searchQuery.isBlank()) visibleMovies
+        else visibleMovies.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val filteredSeries = remember(searchQuery, visibleSeries) {
+        if (searchQuery.isBlank()) visibleSeries
+        else visibleSeries.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val continueWatchingList = remember(continueWatchingMap, allVisibleMedia) {
         continueWatchingMap.values.mapNotNull { progress ->
-            val media = allMedia.find { it.id == progress.mediaId }
+            val media = allVisibleMedia.find { it.id == progress.mediaId }
             if (media != null) Pair(media, progress) else null
         }.sortedByDescending { it.second.lastUpdated }
     }
 
-    val recommendedList = remember(allMedia) {
-        allMedia.shuffled().take(6)
+    val recommendedList = remember(allVisibleMedia) {
+        allVisibleMedia.shuffled().take(6)
     }
 
     val handleItemClick: (MediaSeries) -> Unit = { media ->
@@ -193,7 +218,10 @@ fun HomeScreen(
                         items = recommendedList,
                         onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia,
-                        onChangePoster = onChangePoster
+                        onChangePoster = { mediaId ->
+                            selectedMediaIdForPoster = mediaId
+                            imagePickerLauncher.launch("image/*")
+                        }
                     )
                 }
             }
@@ -206,7 +234,10 @@ fun HomeScreen(
                         items = filteredMovies,
                         onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia,
-                        onChangePoster = onChangePoster
+                        onChangePoster = { mediaId ->
+                            selectedMediaIdForPoster = mediaId
+                            imagePickerLauncher.launch("image/*")
+                        }
                     )
                 }
             }
@@ -219,7 +250,10 @@ fun HomeScreen(
                         items = filteredSeries,
                         onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia,
-                        onChangePoster = onChangePoster
+                        onChangePoster = { mediaId ->
+                            selectedMediaIdForPoster = mediaId
+                            imagePickerLauncher.launch("image/*")
+                        }
                     )
                 }
             }
@@ -382,7 +416,7 @@ fun MediaSectionRow(
     items: List<MediaSeries>,
     onMediaSelected: (MediaSeries) -> Unit,
     onHideMedia: (String) -> Unit,
-    onChangePoster: (String) -> Unit = {}
+    onChangePoster: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
