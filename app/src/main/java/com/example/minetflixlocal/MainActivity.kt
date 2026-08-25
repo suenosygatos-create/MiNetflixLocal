@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.minetflixlocal.model.MediaEpisode
+import com.example.minetflixlocal.model.MediaSeason
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
@@ -103,11 +105,18 @@ fun MainApp() {
             MediaSeries(
                 id = video.id.toString(),
                 title = video.title,
-                episodes = listOf(
-                    MediaEpisode(
-                        id = video.id.toString(),
-                        title = video.title,
-                        videoUri = video.uri
+                seasons = listOf(
+                    MediaSeason(
+                        id = "season_1",
+                        seasonNumber = 1,
+                        episodes = listOf(
+                            MediaEpisode(
+                                id = video.id.toString(),
+                                title = video.title,
+                                episodeNumber = 1,
+                                videoUri = Uri.parse(video.uri.toString())
+                            )
+                        )
                     )
                 )
             )
@@ -133,7 +142,7 @@ fun MainApp() {
                 onMediaSelected = { media ->
                     val ep = media.episodes.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri
+                        playingUri = ep.videoUri.toString()
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
@@ -144,7 +153,7 @@ fun MainApp() {
                 onResumePlayback = { media, episodeId ->
                     val ep = media.episodes.find { it.id == episodeId } ?: media.episodes.firstOrNull()
                     if (ep != null) {
-                        playingUri = ep.videoUri
+                        playingUri = ep.videoUri.toString()
                         playingTitle = ep.title
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
