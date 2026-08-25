@@ -2,23 +2,25 @@ package com.example.minetflixlocal
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.minetflixlocal.model.Episode
-import com.example.minetflixlocal.model.Season
 import com.example.minetflixlocal.model.MediaSeries
+import com.example.minetflixlocal.model.Season
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme
@@ -70,16 +72,15 @@ fun MainApp() {
     var playingStartPos by remember { mutableStateOf(0L) }
     var playingMediaId by remember { mutableStateOf("") }
     var playingEpisodeId by remember { mutableStateOf("") }
-    var isMovie by remember { mutableStateOf(false) 
-    var scannedVideos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
+    var isMovie by remember { mutableStateOf(false) }
 
-// 1. Guardar el estado de los IDs ocultos en memoria de Compose
-var hiddenIds by remember { mutableStateOf(VideoPreferences.getHiddenVideoIds(context)) }
+    // Estado para los IDs ocultos
+    var hiddenIds by remember { mutableStateOf(VideoPreferences.getHiddenVideoIds(context)) }
 
-// 2. Función auxiliar para refrescar el estado cuando ocultes un video
-val onHideVideo: (String) -> Unit = { videoId ->
-    VideoPreferences.hideVideo(context, videoId)
-    hiddenIds = VideoPreferences.getHiddenVideoIds(context)
+    // Función auxiliar para refrescar el estado al ocultar un video
+    val onHideVideo: (String) -> Unit = { videoId ->
+        VideoPreferences.hideVideo(context, videoId)
+        hiddenIds = VideoPreferences.getHiddenVideoIds(context)
     }
 
     // Solicitar permisos de almacenamiento
@@ -112,15 +113,15 @@ val onHideVideo: (String) -> Unit = { videoId ->
         }
     }
 
-        // 3. Filtrar videos antes de agrupar
-val visibleVideos = remember(scannedVideos, hiddenIds) {
-    scannedVideos.filter { video -> video.id.toString() !in hiddenIds }
-}
+    // Filtrar videos antes de agrupar
+    val visibleVideos = remember(scannedVideos, hiddenIds) {
+        scannedVideos.filter { video -> video.id.toString() !in hiddenIds }
+    }
 
-// 4. Usar 'visibleVideos' en lugar de 'scannedVideos'
-val (seriesFolders, singleMovies) = remember(visibleVideos) {
-    videoScanner.groupVideosByFolder(visibleVideos)
-}
+    // Usar 'visibleVideos' en lugar de 'scannedVideos'
+    val (seriesFolders, singleMovies) = remember(visibleVideos) {
+        videoScanner.groupVideosByFolder(visibleVideos)
+    }
 
     // Convertir series (carpetas con múltiples videos) a MediaSeries
     val seriesList = remember(seriesFolders) {
@@ -165,7 +166,7 @@ val (seriesFolders, singleMovies) = remember(visibleVideos) {
         }
     }
 
-    // Convertir películas individuales a MediaSeries (cada una es su propia serie de 1 episodio)
+    // Convertir películas individuales a MediaSeries
     val moviesList = remember(singleMovies) {
         singleMovies.map { movie ->
             val episode = Episode(
@@ -231,7 +232,9 @@ val (seriesFolders, singleMovies) = remember(visibleVideos) {
                 },
                 onOpenSettings = {
                     currentScreen = Screen.SETTINGS
-                    onHideMedia = { mediaId -> onHideVideo(mediaId) }
+                },
+                onHideMedia = { mediaId ->
+                    onHideVideo(mediaId)
                 }
             )
         }
