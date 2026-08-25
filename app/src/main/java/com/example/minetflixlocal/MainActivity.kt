@@ -23,6 +23,7 @@ import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.ui.*
 import com.example.minetflixlocal.ui.theme.MiNetflixLocalTheme
 import com.example.minetflixlocal.util.LocalVideo
+import com.example.minetflixlocal.util.MediaFolder
 import com.example.minetflixlocal.util.VideoScanner
 import com.example.minetflixlocal.util.WatchProgress
 import com.example.minetflixlocal.util.WatchProgressManager
@@ -54,6 +55,7 @@ enum class Screen {
 fun MainApp() {
     val context = LocalContext.current
     val progressManager = remember { WatchProgressManager(context) }
+    val videoScanner = remember { VideoScanner(context) }
 
     var currentScreen by remember { mutableStateOf(Screen.PROFILE_SELECTION) }
     var activeProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -68,6 +70,7 @@ fun MainApp() {
     var playingStartPos by remember { mutableStateOf(0L) }
     var playingMediaId by remember { mutableStateOf("") }
     var playingEpisodeId by remember { mutableStateOf("") }
+    var isMovie by remember { mutableStateOf(false) }
 
     // Solicitar permisos de almacenamiento
     val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -80,14 +83,14 @@ fun MainApp() {
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            scannedVideos = VideoScanner(context).scanVideos()
+            scannedVideos = videoScanner.scanVideos()
         }
     }
 
     LaunchedEffect(Unit) {
         val permissionStatus = ContextCompat.checkSelfPermission(context, permissionToRequest)
         if (permissionStatus == PackageManager.PERMISSION_GRANTED) {
-            scannedVideos = VideoScanner(context).scanVideos()
+            scannedVideos = videoScanner.scanVideos()
         } else {
             launcher.launch(permissionToRequest)
         }
@@ -99,23 +102,72 @@ fun MainApp() {
         }
     }
 
-    // Adaptar los videos del celular a la estructura de la app
-    val mediaList = remember(scannedVideos) {
-        scannedVideos.map { video ->
+    // Agrupar videos en series y películas
+    val (seriesFolders, singleMovies) = remember(scannedVideos) {
+        videoScanner.groupVideosByFolder(scannedVideos)
+    }
+
+    // Convertir series (carpetas con múltiples videos) a MediaSeries
+    val seriesList = remember(seriesFolders) {
+        seriesFolders.map { folder ->
+            val seasons = folder.videos
+                .groupBy { it.title.substringBefore("S").substringBefore("s") }
+                .map { (seasonName, seasonVideos) ->
+                    Season(
+                        seasonNumber = 1,
+                        title = seasonName,
+                        episodes = seasonVideos.mapIndexed { index, video ->
+                            Episode(
+                                id = video.id.toString(),
+                                title = video.title,
+                                videoPath = video.uri.toString()
+                            )
+                        }
+                    )
+                }
+
+            MediaSeries(
+                id = folder.id,
+                title = folder.name,
+                seasons = if (seasons.isEmpty()) {
+                    listOf(
+                        Season(
+                            seasonNumber = 1,
+                            title = folder.name,
+                            episodes = folder.videos.map { video ->
+                                Episode(
+                                    id = video.id.toString(),
+                                    title = video.title,
+                                    videoPath = video.uri.toString()
+                                )
+                            }
+                        )
+                    )
+                } else {
+                    seasons
+                }
+            )
+        }
+    }
+
+    // Convertir películas individuales a MediaSeries (cada una es su propia serie de 1 episodio)
+    val moviesList = remember(singleMovies) {
+        singleMovies.map { movie ->
             val episode = Episode(
-                id = video.id.toString(),
-                title = video.title,
-                videoPath = video.uri.toString()
+                id = movie.id.toString(),
+                title = movie.title,
+                videoPath = movie.uri.toString()
             )
             val season = Season(
                 seasonNumber = 1,
-                title = video.title,
+                title = "Película",
                 episodes = listOf(episode)
             )
             MediaSeries(
-                id = video.id.toString(),
-                title = video.title,
-                seasons = listOf(season)
+                id = movie.id.toString(),
+                title = movie.title,
+                seasons = listOf(season),
+                isMovie = true
             )
         }
     }
@@ -133,8 +185,8 @@ fun MainApp() {
         Screen.HOME -> {
             HomeScreen(
                 activeProfile = activeProfile,
-                seriesList = mediaList,
-                moviesList = emptyList(),
+                seriesList = seriesList,
+                moviesList = moviesList,
                 continueWatchingMap = currentProfileProgress,
                 onMediaSelected = { media ->
                     val season = media.seasons.firstOrNull()
@@ -145,6 +197,7 @@ fun MainApp() {
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
                         playingStartPos = currentProfileProgress[media.id]?.positionMs ?: 0L
+                        isMovie = media.isMovie
                         currentScreen = Screen.PLAYER
                     }
                 },
@@ -157,6 +210,7 @@ fun MainApp() {
                         playingMediaId = media.id
                         playingEpisodeId = ep.id
                         playingStartPos = currentProfileProgress[media.id]?.positionMs ?: 0L
+                        isMovie = media.isMovie
                         currentScreen = Screen.PLAYER
                     }
                 },
@@ -171,7 +225,7 @@ fun MainApp() {
                 selectedEngine = selectedEngine,
                 onEngineChanged = { engine -> selectedEngine = engine },
                 onRescan = {
-                    scannedVideos = VideoScanner(context).scanVideos()
+                    scannedVideos = videoScanner.scanVideos()
                 },
                 onBack = { currentScreen = Screen.HOME },
                 onChangeProfile = {
