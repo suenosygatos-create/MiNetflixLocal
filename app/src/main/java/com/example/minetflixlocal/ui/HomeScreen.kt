@@ -6,13 +6,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,7 +41,8 @@ fun HomeScreen(
     onMediaSelected: (MediaSeries) -> Unit,
     onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit,
-    onHideMedia: (String) -> Unit
+    onHideMedia: (String) -> Unit,
+    onChangePoster: (String) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -83,11 +87,12 @@ fun HomeScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Buscar películas o series...", color = Color.Gray) },
+                            placeholder = { Text("Buscar en MovieBox...", color = Color.Gray) },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFFE50914)
+                                focusedBorderColor = Color(0xFFFF3366),
+                                unfocusedBorderColor = Color(0xFF2B2B36)
                             ),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -95,18 +100,33 @@ fun HomeScreen(
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "NETFLIX",
-                                color = Color(0xFFE50914),
+                                text = "MOVIEBOX",
+                                color = Color(0xFFFF3366),
                                 fontWeight = FontWeight.Black,
-                                fontSize = 24.sp
+                                fontSize = 22.sp,
+                                letterSpacing = 1.5.sp
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             activeProfile?.let {
-                                Text(
-                                    text = "${it.avatarIcon} ${it.name}",
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
+                                Surface(
+                                    color = Color(0xFF1F1F2C),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2B2B36))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(text = it.avatarIcon, fontSize = 14.sp)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = it.name,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -126,10 +146,10 @@ fun HomeScreen(
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF141414))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F0F1A))
             )
         },
-        containerColor = Color(0xFF141414)
+        containerColor = Color(0xFF0F0F1A)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -172,7 +192,8 @@ fun HomeScreen(
                         title = "Recomendados para ti",
                         items = recommendedList,
                         onMediaSelected = handleItemClick,
-                        onHideMedia = onHideMedia
+                        onHideMedia = onHideMedia,
+                        onChangePoster = onChangePoster
                     )
                 }
             }
@@ -184,7 +205,8 @@ fun HomeScreen(
                         title = "Películas",
                         items = filteredMovies,
                         onMediaSelected = handleItemClick,
-                        onHideMedia = onHideMedia
+                        onHideMedia = onHideMedia,
+                        onChangePoster = onChangePoster
                     )
                 }
             }
@@ -196,7 +218,8 @@ fun HomeScreen(
                         title = "Series de TV",
                         items = filteredSeries,
                         onMediaSelected = handleItemClick,
-                        onHideMedia = onHideMedia
+                        onHideMedia = onHideMedia,
+                        onChangePoster = onChangePoster
                     )
                 }
             }
@@ -226,7 +249,7 @@ fun HomeScreen(
                             item {
                                 Text(
                                     text = season.title,
-                                    color = Color(0xFFE50914),
+                                    color = Color(0xFFFF3366),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     modifier = Modifier.padding(vertical = 8.dp)
@@ -246,7 +269,7 @@ fun HomeScreen(
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,
                                         contentDescription = "Reproducir",
-                                        tint = Color.White,
+                                        tint = Color(0xFFFF3366),
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -258,7 +281,7 @@ fun HomeScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                HorizontalDivider(color = Color(0xFF333333))
+                                HorizontalDivider(color = Color(0xFF2B2B36))
                             }
                         }
                     }
@@ -270,7 +293,7 @@ fun HomeScreen(
                     Text("Cerrar", color = Color.Gray)
                 }
             },
-            containerColor = Color(0xFF2B2B2B)
+            containerColor = Color(0xFF1F1F2C)
         )
     }
 }
@@ -286,8 +309,8 @@ fun ContinueWatchingCard(
     } else 0f
 
     Card(
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F2C)),
         modifier = Modifier
             .width(140.dp)
             .clickable { onClick() }
@@ -305,19 +328,40 @@ fun ContinueWatchingCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF2B2B36)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.Gray,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f)),
+                        .background(Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Continuar",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(0xFFFF3366), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Continuar",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
             LinearProgressIndicator(
@@ -325,8 +369,8 @@ fun ContinueWatchingCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp),
-                color = Color(0xFFE50914),
-                trackColor = Color.Gray
+                color = Color(0xFFFF3366),
+                trackColor = Color(0xFF2B2B36)
             )
         }
     }
@@ -337,7 +381,8 @@ fun MediaSectionRow(
     title: String,
     items: List<MediaSeries>,
     onMediaSelected: (MediaSeries) -> Unit,
-    onHideMedia: (String) -> Unit
+    onHideMedia: (String) -> Unit,
+    onChangePoster: (String) -> Unit = {}
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
@@ -359,8 +404,8 @@ fun MediaSectionRow(
                         .clickable { onMediaSelected(media) }
                 ) {
                     Card(
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2B2B)),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F2C)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(170.dp)
@@ -377,7 +422,7 @@ fun MediaSectionRow(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(Color(0xFF333333)),
+                                        .background(Color(0xFF2B2B36)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -393,21 +438,48 @@ fun MediaSectionRow(
 
                             IconButton(
                                 onClick = { showMenu = true },
-                                modifier = Modifier.align(Alignment.TopEnd)
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(2.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                    .size(28.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "Opciones",
-                                    tint = Color.White
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
 
                             DropdownMenu(
                                 expanded = showMenu,
-                                onDismissRequest = { showMenu = false }
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(Color(0xFF2B2B36))
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Ocultar") },
+                                    text = { Text("Cambiar portada", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Image,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onChangePoster(media.id)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Ocultar", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.VisibilityOff,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
                                     onClick = {
                                         showMenu = false
                                         onHideMedia(media.id)
