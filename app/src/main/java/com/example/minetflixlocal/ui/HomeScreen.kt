@@ -1,5 +1,6 @@
 package com.example.minetflixlocal.ui
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,16 +50,25 @@ fun HomeScreen(
     onHideMedia: (String) -> Unit,
     onUpdateMediaPoster: (String, Uri) -> Unit
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var selectedSeriesForDetails by remember { mutableStateOf<MediaSeries?>(null) }
     var selectedMediaIdForPoster by remember { mutableStateOf<String?>(null) }
 
-    // Selector para abrir la galería del dispositivo al cambiar la portada
+    // Selector para abrir la galería del dispositivo y obtener permisos persistentes de lectura
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let { selectedUri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    selectedUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+                // Continuará usando la Uri en caso de que el proveedor no requiera permiso persistente
+            }
             selectedMediaIdForPoster?.let { mediaId ->
                 onUpdateMediaPoster(mediaId, selectedUri)
             }
@@ -198,7 +209,10 @@ fun HomeScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            items(continueWatchingList) { (media, progress) ->
+                            items(
+                                items = continueWatchingList,
+                                key = { it.first.id }
+                            ) { (media, progress) ->
                                 ContinueWatchingCard(
                                     media = media,
                                     progress = progress,
@@ -220,7 +234,7 @@ fun HomeScreen(
                         onHideMedia = onHideMedia,
                         onChangePoster = { mediaId ->
                             selectedMediaIdForPoster = mediaId
-                            imagePickerLauncher.launch("image/*")
+                            imagePickerLauncher.launch(arrayOf("image/*"))
                         }
                     )
                 }
@@ -236,7 +250,7 @@ fun HomeScreen(
                         onHideMedia = onHideMedia,
                         onChangePoster = { mediaId ->
                             selectedMediaIdForPoster = mediaId
-                            imagePickerLauncher.launch("image/*")
+                            imagePickerLauncher.launch(arrayOf("image/*"))
                         }
                     )
                 }
@@ -252,7 +266,7 @@ fun HomeScreen(
                         onHideMedia = onHideMedia,
                         onChangePoster = { mediaId ->
                             selectedMediaIdForPoster = mediaId
-                            imagePickerLauncher.launch("image/*")
+                            imagePickerLauncher.launch(arrayOf("image/*"))
                         }
                     )
                 }
@@ -280,7 +294,7 @@ fun HomeScreen(
                 ) {
                     LazyColumn {
                         series.seasons.forEach { season ->
-                            item {
+                            item(key = "season_${season.id}") {
                                 Text(
                                     text = season.title,
                                     color = Color(0xFFFF3366),
@@ -289,7 +303,10 @@ fun HomeScreen(
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
                             }
-                            items(season.episodes) { episode ->
+                            items(
+                                items = season.episodes,
+                                key = { "ep_${it.id}" }
+                            ) { episode ->
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
@@ -431,7 +448,10 @@ fun MediaSectionRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(items) { media ->
+            items(
+                items = items,
+                key = { it.id }
+            ) { media ->
                 Column(
                     modifier = Modifier
                         .width(120.dp)
