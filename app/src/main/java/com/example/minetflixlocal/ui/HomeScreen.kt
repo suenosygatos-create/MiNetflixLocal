@@ -38,6 +38,7 @@ fun HomeScreen(
     onMediaSelected: (MediaSeries) -> Unit,
     onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit
+    onHideMedia: (String) -> Unit //
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -253,6 +254,7 @@ fun MediaSectionRow(
     title: String,
     items: List<MediaSeries>,
     onMediaSelected: (MediaSeries) -> Unit
+    onHideMedia: (String) -> Unit //
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
@@ -288,7 +290,34 @@ fun MediaSectionRow(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            } else {
+                            } 
+                            var showMenu by remember { mutableStateOf(false) }
+
+    // Botón de tres puntos en la esquina superior derecha del poster
+    IconButton(
+        onClick = { showMenu = true },
+        modifier = Modifier.align(Alignment.TopEnd)
+    ) {
+        Icon(
+            imageVector = Icons.Default.MoreVert,
+            contentDescription = "Opciones",
+            tint = Color.White
+        )
+    }
+
+    // Menú desplegable
+    DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false }
+    ) {
+        DropdownMenuItem(
+            text = { Text("Ocultar") },
+            onClick = {
+                showMenu = false
+                onHideMedia(media.id) // Ejecuta la función para ocultar
+            }
+        )
+    }else {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
