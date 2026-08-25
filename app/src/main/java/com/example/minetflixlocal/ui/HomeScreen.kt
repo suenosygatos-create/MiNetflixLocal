@@ -42,6 +42,7 @@ fun HomeScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
+    var selectedSeriesForDetails by remember { mutableStateOf<MediaSeries?>(null) }
 
     val allMedia = remember(seriesList, moviesList) { seriesList + moviesList }
 
@@ -64,6 +65,14 @@ fun HomeScreen(
 
     val recommendedList = remember(allMedia) {
         allMedia.shuffled().take(6)
+    }
+
+    val handleItemClick: (MediaSeries) -> Unit = { media ->
+        if (media.isMovie) {
+            onMediaSelected(media)
+        } else {
+            selectedSeriesForDetails = media
+        }
     }
 
     Scaffold(
@@ -162,7 +171,7 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Recomendados para ti",
                         items = recommendedList,
-                        onMediaSelected = onMediaSelected,
+                        onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia
                     )
                 }
@@ -174,7 +183,7 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Películas",
                         items = filteredMovies,
-                        onMediaSelected = onMediaSelected,
+                        onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia
                     )
                 }
@@ -186,12 +195,83 @@ fun HomeScreen(
                     MediaSectionRow(
                         title = "Series de TV",
                         items = filteredSeries,
-                        onMediaSelected = onMediaSelected,
+                        onMediaSelected = handleItemClick,
                         onHideMedia = onHideMedia
                     )
                 }
             }
         }
+    }
+
+    // Diálogo de Selección de Temporadas y Episodios
+    selectedSeriesForDetails?.let { series ->
+        AlertDialog(
+            onDismissRequest = { selectedSeriesForDetails = null },
+            title = {
+                Text(
+                    text = series.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp)
+                ) {
+                    LazyColumn {
+                        series.seasons.forEach { season ->
+                            item {
+                                Text(
+                                    text = season.title,
+                                    color = Color(0xFFE50914),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
+                            items(season.episodes) { episode ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedSeriesForDetails = null
+                                            onResumePlayback(series, episode.id)
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Reproducir",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = episode.title,
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                HorizontalDivider(color = Color(0xFF333333))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedSeriesForDetails = null }) {
+                    Text("Cerrar", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF2B2B2B)
+        )
     }
 }
 
