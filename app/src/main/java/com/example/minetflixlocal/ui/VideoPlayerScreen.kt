@@ -5,8 +5,10 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +50,11 @@ fun VideoPlayerScreen(
     onNextEpisode: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
+    // Interceptar el botón de retroceso nativo del celular para que vuelva limpiamente
+    BackHandler {
+        onBack()
+    }
+
     val context = LocalContext.current
     var showNextOverlay by remember { mutableStateOf(false) }
 
@@ -240,11 +247,19 @@ fun VlcVideoPlayer(
         }
     }
 
+    // Fuente de interacción vacía para evitar efectos visuales molestos o selección completa de pantalla
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable { showControls = !showControls }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null // Elimina el destello o color gris al tocar la pantalla
+            ) { 
+                showControls = !showControls 
+            }
     ) {
         AndroidView(
             factory = { ctx ->
