@@ -1,9 +1,5 @@
 package com.example.minetflixlocal.ui
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -20,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +38,7 @@ fun HomeScreen(
     onMediaSelected: (MediaSeries) -> Unit,
     onResumePlayback: (MediaSeries, String) -> Unit,
     onOpenSettings: () -> Unit,
-    onHideMedia: (String) -> Unit //
+    onHideMedia: (String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -261,7 +257,7 @@ fun MediaSectionRow(
     title: String,
     items: List<MediaSeries>,
     onMediaSelected: (MediaSeries) -> Unit,
-    onHideMedia: (String) -> Unit //
+    onHideMedia: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
@@ -297,34 +293,7 @@ fun MediaSectionRow(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            } 
-                            var showMenu by remember { mutableStateOf(false) }
-
-    // Botón de tres puntos en la esquina superior derecha del poster
-    IconButton(
-        onClick = { showMenu = true },
-        modifier = Modifier.align(Alignment.TopEnd)
-    ) {
-        Icon(
-            imageVector = Icons.Default.MoreVert,
-            contentDescription = "Opciones",
-            tint = Color.White
-        )
-    }
-
-    // Menú desplegable
-    DropdownMenu(
-        expanded = showMenu,
-        onDismissRequest = { showMenu = false }
-    ) {
-        DropdownMenuItem(
-            text = { Text("Ocultar") },
-            onClick = {
-                showMenu = false
-                onHideMedia(media.id) // Ejecuta la función para ocultar
-            }
-        )
-    }else {
+                            } else {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -338,6 +307,32 @@ fun MediaSectionRow(
                                         modifier = Modifier.size(40.dp)
                                     )
                                 }
+                            }
+
+                            var showMenu by remember { mutableStateOf(false) }
+
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Opciones",
+                                    tint = Color.White
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Ocultar") },
+                                    onClick = {
+                                        showMenu = false
+                                        onHideMedia(media.id)
+                                    }
+                                )
                             }
                         }
                     }
