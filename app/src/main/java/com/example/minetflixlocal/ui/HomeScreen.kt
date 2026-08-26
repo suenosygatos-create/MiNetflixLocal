@@ -25,7 +25,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -37,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.minetflixlocal.model.Episode
 import com.example.minetflixlocal.model.MediaSeries
 import com.example.minetflixlocal.model.UserProfile
 import com.example.minetflixlocal.util.WatchProgress
@@ -71,9 +69,8 @@ fun HomeScreen(
     /*
      * Serie seleccionada para abrir DetailScreen.
      *
-     * IMPORTANTE:
-     * Ya no mostramos un AlertDialog con todos los episodios.
-     * La serie entra en su propia pantalla de detalles.
+     * Las series ya no muestran un AlertDialog con los episodios.
+     * Se abre directamente la pantalla de detalles.
      */
     var selectedSeriesForDetails by remember {
         mutableStateOf<MediaSeries?>(null)
@@ -261,8 +258,7 @@ fun HomeScreen(
     // CLICK SOBRE CONTENIDO
     // =========================================================
 
-    val handleItemClick:
-            (MediaSeries) -> Unit = { media ->
+    val handleItemClick: (MediaSeries) -> Unit = { media ->
 
         if (media.isMovie) {
 
@@ -270,14 +266,13 @@ fun HomeScreen(
              * Las películas siguen entrando
              * directamente al reproductor.
              */
+
             onMediaSelected(media)
 
         } else {
 
             /*
-             * LAS SERIES NO SE REPRODUCEN DIRECTAMENTE.
-             *
-             * Primero abrimos:
+             * Las series pasan primero por DetailScreen:
              *
              * Serie
              *   ↓
@@ -287,6 +282,7 @@ fun HomeScreen(
              *   ↓
              * Reproductor
              */
+
             selectedSeriesForDetails = media
         }
     }
@@ -316,7 +312,7 @@ fun HomeScreen(
                             placeholder = {
 
                                 Text(
-                                    "Buscar películas o series...",
+                                    text = "Buscar películas o series...",
                                     color = Color(0xFF8E8E93)
                                 )
                             },
@@ -475,7 +471,8 @@ fun HomeScreen(
 
                         Icon(
 
-                            Icons.Default.Settings,
+                            imageVector =
+                                Icons.Default.Settings,
 
                             contentDescription =
                                 "Ajustes",
@@ -728,15 +725,6 @@ fun HomeScreen(
     // DETALLE DE LA SERIE
     // =========================================================
 
-    /*
-     * IMPORTANTE:
-     *
-     * En lugar del AlertDialog anterior,
-     * ahora utilizamos DetailScreen.
-     *
-     * La pantalla conserva el mismo tema oscuro.
-     */
-
     selectedSeriesForDetails?.let { series ->
 
         DetailScreen(
@@ -762,9 +750,6 @@ fun HomeScreen(
                  *   MainActivity
                  *       ↓
                  *   VideoPlayer
-                 *
-                 * Usamos el callback existente
-                 * de reproducción.
                  */
 
                 selectedSeriesForDetails =
@@ -788,6 +773,7 @@ fun HomeScreen(
         )
     }
 }
+
 
 // =============================================================
 // CONTINUE WATCHING CARD
@@ -910,7 +896,7 @@ fun ContinueWatchingCard(
                                                 alpha = 0.6f
                                             )
                                         )
-                                )
+                                    )
                             ),
 
                     contentAlignment =
@@ -933,7 +919,8 @@ fun ContinueWatchingCard(
 
                         Icon(
 
-                            Icons.Default.PlayArrow,
+                            imageVector =
+                                Icons.Default.PlayArrow,
 
                             contentDescription =
                                 "Continuar",
@@ -969,6 +956,7 @@ fun ContinueWatchingCard(
     }
 }
 
+
 // =============================================================
 // FILA DE CONTENIDO
 // =============================================================
@@ -986,6 +974,7 @@ fun MediaSectionRow(
         LocalContext.current
 
     Column(
+
         modifier =
             Modifier.padding(
                 bottom = 20.dp
@@ -1220,9 +1209,12 @@ fun MediaSectionRow(
                                     text = {
 
                                         Text(
-                                            "Cambiar portada",
+                                            text =
+                                                "Cambiar portada",
+
                                             color =
                                                 Color.White,
+
                                             fontSize =
                                                 13.sp
                                         )
@@ -1232,7 +1224,8 @@ fun MediaSectionRow(
 
                                         Icon(
 
-                                            Icons.Default.Image,
+                                            imageVector =
+                                                Icons.Default.Image,
 
                                             contentDescription =
                                                 null,
@@ -1260,9 +1253,12 @@ fun MediaSectionRow(
                                     text = {
 
                                         Text(
-                                            "Ocultar",
+                                            text =
+                                                "Ocultar",
+
                                             color =
                                                 Color.White,
+
                                             fontSize =
                                                 13.sp
                                         )
@@ -1272,7 +1268,8 @@ fun MediaSectionRow(
 
                                         Icon(
 
-                                            Icons.Default.VisibilityOff,
+                                            imageVector =
+                                                Icons.Default.VisibilityOff,
 
                                             contentDescription =
                                                 null,
