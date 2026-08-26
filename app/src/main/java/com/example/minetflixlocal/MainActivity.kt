@@ -55,8 +55,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Intercepción de teclas físicas
-    // TV Remote / D-Pad / Botones multimedia
     override fun onKeyDown(
         keyCode: Int,
         event: KeyEvent?
@@ -64,15 +62,18 @@ class MainActivity : ComponentActivity() {
 
         return when (keyCode) {
 
-            KeyEvent.KEYCODE_BACK ->
+            KeyEvent.KEYCODE_BACK -> {
                 super.onKeyDown(keyCode, event)
+            }
 
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-            KeyEvent.KEYCODE_HEADSETHOOK ->
+            KeyEvent.KEYCODE_HEADSETHOOK -> {
                 true
+            }
 
-            else ->
+            else -> {
                 super.onKeyDown(keyCode, event)
+            }
         }
     }
 }
@@ -89,6 +90,10 @@ fun MainApp() {
 
     val context = LocalContext.current
 
+    // =========================================================
+    // MANAGERS
+    // =========================================================
+
     val progressManager = remember {
         WatchProgressManager(context)
     }
@@ -97,13 +102,17 @@ fun MainApp() {
         VideoScanner(context)
     }
 
+    // =========================================================
+    // NAVEGACIÓN
+    // =========================================================
+
     var currentScreen by remember {
         mutableStateOf(Screen.PROFILE_SELECTION)
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // PERFILES
-    // ---------------------------------------------------------
+    // =========================================================
 
     var profiles by remember {
         mutableStateOf(
@@ -115,17 +124,17 @@ fun MainApp() {
         mutableStateOf<UserProfile?>(null)
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // MOTOR DE REPRODUCCIÓN
-    // ---------------------------------------------------------
+    // =========================================================
 
     var selectedEngine by remember {
         mutableStateOf("EXOPLAYER")
     }
 
-    // ---------------------------------------------------------
-    // VIDEOS ESCANEADOS
-    // ---------------------------------------------------------
+    // =========================================================
+    // VIDEOS
+    // =========================================================
 
     var scannedVideos by remember {
         mutableStateOf<List<LocalVideo>>(emptyList())
@@ -135,9 +144,9 @@ fun MainApp() {
         mutableStateOf<Map<String, WatchProgress>>(emptyMap())
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // REPRODUCCIÓN ACTUAL
-    // ---------------------------------------------------------
+    // =========================================================
 
     var playingUri by remember {
         mutableStateOf<String?>(null)
@@ -163,9 +172,25 @@ fun MainApp() {
         mutableStateOf(false)
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
+    // IDENTIDAD DEL REPRODUCTOR
+    // =========================================================
+    //
+    // Cada vez que se selecciona otro video/episodio
+    // incrementamos este valor.
+    //
+    // Esto ayuda a que VideoPlayerScreen descarte
+    // cualquier instancia anterior del reproductor.
+    //
+    // =========================================================
+
+    var playerInstance by remember {
+        mutableStateOf(0L)
+    }
+
+    // =========================================================
     // VIDEOS OCULTOS
-    // ---------------------------------------------------------
+    // =========================================================
 
     var hiddenIds by remember {
         mutableStateOf(
@@ -184,9 +209,9 @@ fun MainApp() {
             VideoPreferences.getHiddenVideoIds(context)
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // PERMISOS
-    // ---------------------------------------------------------
+    // =========================================================
 
     val permissionToRequest =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -200,7 +225,8 @@ fun MainApp() {
 
     val launcher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission()
+            contract =
+                ActivityResultContracts.RequestPermission()
         ) { isGranted ->
 
             if (isGranted) {
@@ -210,9 +236,9 @@ fun MainApp() {
             }
         }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // ESCANEO INICIAL
-    // ---------------------------------------------------------
+    // =========================================================
 
     LaunchedEffect(Unit) {
 
@@ -238,24 +264,25 @@ fun MainApp() {
         }
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // CARGAR PROGRESO DEL PERFIL
-    // ---------------------------------------------------------
+    // =========================================================
 
     LaunchedEffect(activeProfile?.id) {
 
-        activeProfile?.let { profile ->
+        val profile =
+            activeProfile
+                ?: return@LaunchedEffect
 
-            currentProfileProgress =
-                progressManager.getProgressForProfile(
-                    profile.id
-                )
-        }
+        currentProfileProgress =
+            progressManager.getProgressForProfile(
+                profile.id
+            )
     }
 
-    // ---------------------------------------------------------
-    // FILTRAR VIDEOS OCULTOS
-    // ---------------------------------------------------------
+    // =========================================================
+    // VIDEOS VISIBLES
+    // =========================================================
 
     val visibleVideos =
         remember(
@@ -270,33 +297,7 @@ fun MainApp() {
         }
 
     // =========================================================
-    // NUEVA ESTRUCTURA DE SERIES
-    // =========================================================
-    //
-    // ANTES:
-    //
-    // folder.videos
-    //     ↓
-    // groupBy(...)
-    //     ↓
-    // seasonNumber = 1
-    //
-    // AHORA:
-    //
-    // VideoScanner
-    //     ↓
-    // detecta S01E01
-    // detecta S01E02
-    // detecta S02E01
-    //     ↓
-    // MediaSeries
-    //     ├── Season 1
-    //     │      ├── Episode 1
-    //     │      └── Episode 2
-    //     │
-    //     └── Season 2
-    //            └── Episode 1
-    //
+    // SERIES
     // =========================================================
 
     val seriesList =
@@ -307,16 +308,9 @@ fun MainApp() {
             )
         }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // PELÍCULAS
-    // ---------------------------------------------------------
-    //
-    // Las películas siguen utilizando la lógica existente:
-    // un vídeo individual se presenta como película.
-    //
-    // Las películas que estén solas dentro de una carpeta
-    // también siguen funcionando.
-    // ---------------------------------------------------------
+    // =========================================================
 
     val (_, singleMovies) =
         remember(visibleVideos) {
@@ -361,7 +355,7 @@ fun MainApp() {
         }
 
     // =========================================================
-    // SIGUIENTE EPISODIO
+    // BUSCAR SERIE ACTUAL
     // =========================================================
 
     val currentSeries =
@@ -375,16 +369,45 @@ fun MainApp() {
             }
         }
 
+    // =========================================================
+    // TODOS LOS EPISODIOS
+    // =========================================================
+    //
+    // Importante:
+    // se mantienen en el orden:
+    //
+    // Temporada 1
+    //   Episodio 1
+    //   Episodio 2
+    //
+    // Temporada 2
+    //   Episodio 1
+    //   Episodio 2
+    //
+    // =========================================================
+
     val allEpisodes =
         remember(currentSeries) {
 
             currentSeries
                 ?.seasons
-                ?.flatMap {
-                    it.episodes
+                ?.sortedBy {
+                    it.seasonNumber
+                }
+                ?.flatMap { season ->
+
+                    season.episodes
+                        .sortedBy {
+                            it.episodeNumber
+                        }
+
                 }
                 ?: emptyList()
         }
+
+    // =========================================================
+    // ÍNDICE DEL EPISODIO ACTUAL
+    // =========================================================
 
     val currentEpisodeIndex =
         remember(
@@ -392,10 +415,16 @@ fun MainApp() {
             playingEpisodeId
         ) {
 
-            allEpisodes.indexOfFirst {
-                it.id == playingEpisodeId
+            allEpisodes.indexOfFirst { episode ->
+
+                episode.id ==
+                    playingEpisodeId
             }
         }
+
+    // =========================================================
+    // SIGUIENTE EPISODIO
+    // =========================================================
 
     val nextEpisode =
         remember(
@@ -408,7 +437,7 @@ fun MainApp() {
                 !isMovie &&
                 currentEpisodeIndex >= 0 &&
                 currentEpisodeIndex + 1 <
-                allEpisodes.size
+                    allEpisodes.size
             ) {
 
                 allEpisodes[
@@ -422,14 +451,95 @@ fun MainApp() {
         }
 
     // =========================================================
-    // NAVEGACIÓN PRINCIPAL
+    // FUNCIÓN PARA OBTENER POSICIÓN GUARDADA
+    // =========================================================
+
+    fun getSavedPosition(
+        mediaId: String,
+        episodeId: String
+    ): Long {
+
+        // Primero buscamos por episodio.
+        val episodeProgress =
+            currentProfileProgress[
+                episodeId
+            ]
+
+        if (episodeProgress != null) {
+
+            return episodeProgress.positionMs
+        }
+
+        // Compatibilidad con progreso antiguo
+        // que solamente utilizaba mediaId.
+
+        val mediaProgress =
+            currentProfileProgress[
+                mediaId
+            ]
+
+        return mediaProgress?.positionMs ?: 0L
+    }
+
+    // =========================================================
+    // ABRIR EPISODIO
+    // =========================================================
+
+    fun openEpisode(
+        media: MediaSeries,
+        episode: Episode,
+        resumePosition: Long? = null
+    ) {
+
+        // -----------------------------------------------------
+        // 1. Primero establecemos todos los estados.
+        // -----------------------------------------------------
+
+        playingUri =
+            episode.videoPath
+
+        playingTitle =
+            episode.title
+
+        playingMediaId =
+            media.id
+
+        playingEpisodeId =
+            episode.id
+
+        playingStartPos =
+            resumePosition
+                ?: getSavedPosition(
+                    media.id,
+                    episode.id
+                )
+
+        isMovie =
+            media.isMovie
+
+        // -----------------------------------------------------
+        // 2. Nueva instancia lógica del reproductor.
+        // -----------------------------------------------------
+
+        playerInstance++
+
+        // -----------------------------------------------------
+        // 3. Finalmente navegamos al reproductor.
+        // -----------------------------------------------------
+
+        currentScreen =
+            Screen.PLAYER
+    }
+
+    // =========================================================
+    // NAVEGACIÓN
     // =========================================================
 
     when (currentScreen) {
 
-        // -----------------------------------------------------
+        // =====================================================
         // PERFIL
-        // -----------------------------------------------------
+        // =====================================================
 
         Screen.PROFILE_SELECTION -> {
 
@@ -440,129 +550,129 @@ fun MainApp() {
                     activeProfile =
                         profile
 
+                    // Recargar progreso inmediatamente
+                    // al seleccionar perfil.
+
+                    currentProfileProgress =
+                        progressManager
+                            .getProgressForProfile(
+                                profile.id
+                            )
+
                     currentScreen =
                         Screen.HOME
                 }
             )
         }
 
-        // -----------------------------------------------------
+        // =====================================================
         // HOME
-        // -----------------------------------------------------
+        // =====================================================
 
         Screen.HOME -> {
 
             HomeScreen(
 
-                activeProfile = activeProfile,
+                activeProfile =
+                    activeProfile,
 
-                seriesList = seriesList,
+                seriesList =
+                    seriesList,
 
-                moviesList = moviesList,
+                moviesList =
+                    moviesList,
 
                 continueWatchingMap =
                     currentProfileProgress,
 
+                // -------------------------------------------------
+                // Selección normal
+                // -------------------------------------------------
+
                 onMediaSelected = { media ->
 
-                    /*
-                     * IMPORTANTE:
-                     *
-                     * Por ahora mantenemos exactamente
-                     * el comportamiento de la interfaz actual.
-                     *
-                     * La selección de temporada/episodio
-                     * se incorporará en DetailScreen.kt.
-                     *
-                     * No modificamos aquí la interfaz.
-                     */
-
                     val season =
-                        media.seasons.firstOrNull()
+                        media.seasons
+                            .sortedBy {
+                                it.seasonNumber
+                            }
+                            .firstOrNull()
 
                     val episode =
                         season
                             ?.episodes
+                            ?.sortedBy {
+                                it.episodeNumber
+                            }
                             ?.firstOrNull()
 
                     if (episode != null) {
 
-                        playingUri =
-                            episode.videoPath
-
-                        playingTitle =
-                            episode.title
-
-                        playingMediaId =
-                            media.id
-
-                        playingEpisodeId =
-                            episode.id
-
-                        playingStartPos =
-                            currentProfileProgress[
-                                media.id
-                            ]?.positionMs ?: 0L
-
-                        isMovie =
-                            media.isMovie
-
-                        currentScreen =
-                            Screen.PLAYER
+                        openEpisode(
+                            media = media,
+                            episode = episode
+                        )
                     }
                 },
+
+                // -------------------------------------------------
+                // Continuar reproducción
+                // -------------------------------------------------
 
                 onResumePlayback = {
                         media,
                         episodeId ->
 
                     val episode =
-                        media
-                            .seasons
-                            .flatMap {
-                                it.episodes
+                        media.seasons
+                            .sortedBy {
+                                it.seasonNumber
+                            }
+                            .flatMap { season ->
+
+                                season.episodes
+                                    .sortedBy {
+                                        it.episodeNumber
+                                    }
                             }
                             .find {
                                 it.id == episodeId
                             }
-                            ?: media
-                                .seasons
+                            ?: media.seasons
+                                .sortedBy {
+                                    it.seasonNumber
+                                }
+                                .flatMap { season ->
+
+                                    season.episodes
+                                        .sortedBy {
+                                            it.episodeNumber
+                                        }
+                                }
                                 .firstOrNull()
-                                ?.episodes
-                                ?.firstOrNull()
 
                     if (episode != null) {
 
-                        playingUri =
-                            episode.videoPath
-
-                        playingTitle =
-                            episode.title
-
-                        playingMediaId =
-                            media.id
-
-                        playingEpisodeId =
-                            episode.id
-
-                        playingStartPos =
-                            currentProfileProgress[
-                                media.id
-                            ]?.positionMs ?: 0L
-
-                        isMovie =
-                            media.isMovie
-
-                        currentScreen =
-                            Screen.PLAYER
+                        openEpisode(
+                            media = media,
+                            episode = episode
+                        )
                     }
                 },
+
+                // -------------------------------------------------
+                // Configuración
+                // -------------------------------------------------
 
                 onOpenSettings = {
 
                     currentScreen =
                         Screen.SETTINGS
                 },
+
+                // -------------------------------------------------
+                // Ocultar
+                // -------------------------------------------------
 
                 onHideMedia = { mediaId ->
 
@@ -573,9 +683,9 @@ fun MainApp() {
             )
         }
 
-        // -----------------------------------------------------
+        // =====================================================
         // SETTINGS
-        // -----------------------------------------------------
+        // =====================================================
 
         Screen.SETTINGS -> {
 
@@ -600,6 +710,12 @@ fun MainApp() {
 
                     activeProfile =
                         profile
+
+                    currentProfileProgress =
+                        progressManager
+                            .getProgressForProfile(
+                                profile.id
+                            )
                 },
 
                 onUpdateProfileAvatar = {
@@ -657,104 +773,162 @@ fun MainApp() {
             )
         }
 
-        // -----------------------------------------------------
-        // REPRODUCTOR
-        // -----------------------------------------------------
+        // =====================================================
+        // PLAYER
+        // =====================================================
 
         Screen.PLAYER -> {
 
+            val uri =
+                playingUri
+
+            val profile =
+                activeProfile
+
             if (
-                playingUri != null &&
-                activeProfile != null
+                uri != null &&
+                profile != null
             ) {
 
-                VideoPlayerScreen(
+                /*
+                 * Key importante:
+                 *
+                 * Cuando cambia playerInstance,
+                 * Compose considera este reproductor
+                 * como una instancia nueva.
+                 *
+                 * Esto evita reutilizar accidentalmente
+                 * el ExoPlayer/VLC anterior.
+                 */
 
-                    videoUriString =
-                        playingUri!!,
+                key(
+                    playerInstance,
+                    uri,
+                    playingEpisodeId
+                ) {
 
-                    title =
-                        playingTitle,
+                    VideoPlayerScreen(
 
-                    engine =
-                        selectedEngine,
+                        videoUriString =
+                            uri,
 
-                    startPositionMs =
-                        playingStartPos,
+                        title =
+                            playingTitle,
 
-                    nextEpisodeTitle =
-                        nextEpisode?.title,
+                        engine =
+                            selectedEngine,
 
-                    nextEpisodePosterUri =
-                        nextEpisode
-                            ?.videoPath
-                            ?.let {
-                                Uri.parse(it)
+                        startPositionMs =
+                            playingStartPos,
+
+                        nextEpisodeTitle =
+                            nextEpisode?.title,
+
+                        /*
+                         * No usamos videoPath como poster.
+                         *
+                         * Si el modelo dispone de posterUri,
+                         * lo usamos.
+                         *
+                         * Si no existe, queda null.
+                         */
+
+                        nextEpisodePosterUri =
+                            currentSeries
+                                ?.posterUri
+                                ?.let {
+                                    Uri.parse(it)
+                                },
+
+                        // -------------------------------------------------
+                        // SIGUIENTE EPISODIO
+                        // -------------------------------------------------
+
+                        onNextEpisode =
+                            nextEpisode?.let { nextEp ->
+
+                                {
+
+                                    // -----------------------------------------
+                                    // Guardar referencia de la nueva serie
+                                    // -----------------------------------------
+
+                                    val media =
+                                        currentSeries
+
+                                    if (media != null) {
+
+                                        openEpisode(
+                                            media = media,
+                                            episode = nextEp,
+                                            resumePosition = 0L
+                                        )
+                                    }
+                                }
                             },
 
-                    onNextEpisode =
-                        nextEpisode?.let {
-                            nextEp ->
+                        // -------------------------------------------------
+                        // PROGRESO
+                        // -------------------------------------------------
 
-                            {
+                        onProgressUpdate = {
+                                currentPos,
+                                duration ->
 
-                                playingUri =
-                                    nextEp.videoPath
+                            val currentProfile =
+                                activeProfile
 
-                                playingTitle =
-                                    nextEp.title
+                            if (
+                                currentProfile != null &&
+                                playingMediaId.isNotBlank() &&
+                                playingEpisodeId.isNotBlank()
+                            ) {
 
-                                playingEpisodeId =
-                                    nextEp.id
+                                progressManager.saveProgress(
 
-                                playingStartPos =
-                                    0L
+                                    profileId =
+                                        currentProfile.id,
+
+                                    mediaId =
+                                        playingMediaId,
+
+                                    episodeId =
+                                        playingEpisodeId,
+
+                                    positionMs =
+                                        currentPos,
+
+                                    totalDurationMs =
+                                        duration
+                                )
                             }
                         },
 
-                    onProgressUpdate = {
-                            currentPos,
-                            duration ->
+                        // -------------------------------------------------
+                        // VOLVER
+                        // -------------------------------------------------
 
-                        activeProfile?.let {
-                            profile ->
+                        onBack = {
 
-                            progressManager.saveProgress(
+                            val currentProfile =
+                                activeProfile
 
-                                profileId =
-                                    profile.id,
+                            if (
+                                currentProfile != null
+                            ) {
 
-                                mediaId =
-                                    playingMediaId,
+                                currentProfileProgress =
+                                    progressManager
+                                        .getProgressForProfile(
+                                            currentProfile.id
+                                        )
+                            }
 
-                                episodeId =
-                                    playingEpisodeId,
-
-                                positionMs =
-                                    currentPos,
-
-                                totalDurationMs =
-                                    duration
-                            )
+                            currentScreen =
+                                Screen.HOME
                         }
-                    },
-
-                    onBack = {
-
-                        activeProfile?.let {
-                            profile ->
-
-                            currentProfileProgress =
-                                progressManager
-                                    .getProgressForProfile(
-                                        profile.id
-                                    )
-                        }
-
-                        currentScreen =
-                            Screen.HOME
-                    }
-                )
+                    )
+                }
 
             } else {
 
