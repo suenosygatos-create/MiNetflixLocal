@@ -5,7 +5,8 @@ import android.net.Uri
 data class Episode(
     val id: String,
     val title: String,
-    val videoPath: String
+    val videoPath: String,
+    val episodeNumber: Int = 0
 )
 
 data class Season(
@@ -19,5 +20,5 @@ data class MediaSeries(
     val title: String,
     val isMovie: Boolean = false,
     var posterUri: Uri? = null,
-    val seasons: List<Season>
+    val seasons: List<Season> = emptyList()
 )
