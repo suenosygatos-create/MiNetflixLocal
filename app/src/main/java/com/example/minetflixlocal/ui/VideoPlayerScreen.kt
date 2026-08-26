@@ -4,7 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.media.AudioManager
 import android.net.Uri
-import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -108,8 +109,7 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(Unit) {
-        val activity = context as? Activity
-        val window = activity?.window
+        val window = (context as? Activity)?.window
 
         window?.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
@@ -127,11 +127,8 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-
         if (videoUriString.isNotEmpty()) {
-
             if (engine.uppercase(Locale.US) == "VLC") {
-
                 VlcVideoPlayer(
                     videoUriString = videoUriString,
                     title = title,
@@ -146,9 +143,7 @@ fun VideoPlayerScreen(
                         }
                     }
                 )
-
             } else {
-
                 ExoVideoPlayer(
                     videoUriString = videoUriString,
                     title = title,
@@ -167,7 +162,6 @@ fun VideoPlayerScreen(
         }
 
         if (showNextOverlay && onNextEpisode != null) {
-
             NextEpisodeOverlay(
                 nextTitle = nextEpisodeTitle ?: "Siguiente episodio",
                 posterUri = nextEpisodePosterUri,
@@ -180,11 +174,6 @@ fun VideoPlayerScreen(
         }
     }
 }
-
-
-/* ============================================================
-   EXOPLAYER
-   ============================================================ */
 
 @Composable
 fun ExoVideoPlayer(
@@ -217,16 +206,12 @@ fun ExoVideoPlayer(
             }
     }
 
-    LaunchedEffect(exoPlayer, videoUriString) {
-
+    LaunchedEffect(exoPlayer) {
         while (true) {
-
             if (exoPlayer.isPlaying) {
-
-                val duration =
-                    exoPlayer.duration
-                        .takeIf { it > 0L }
-                        ?: 0L
+                val duration = exoPlayer.duration
+                    .takeIf { it > 0L }
+                    ?: 0L
 
                 onProgressUpdate(
                     exoPlayer.currentPosition,
@@ -239,12 +224,8 @@ fun ExoVideoPlayer(
     }
 
     DisposableEffect(exoPlayer) {
-
         val listener = object : Player.Listener {
-
-            override fun onPlaybackStateChanged(
-                state: Int
-            ) {
+            override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     onVideoEnded()
                 }
@@ -254,11 +235,9 @@ fun ExoVideoPlayer(
         exoPlayer.addListener(listener)
 
         onDispose {
-
-            val duration =
-                exoPlayer.duration
-                    .takeIf { it > 0L }
-                    ?: 0L
+            val duration = exoPlayer.duration
+                .takeIf { it > 0L }
+                ?: 0L
 
             onProgressUpdate(
                 exoPlayer.currentPosition,
@@ -273,20 +252,13 @@ fun ExoVideoPlayer(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-
         AndroidView(
             factory = { ctx ->
-
                 PlayerView(ctx).apply {
-
                     player = exoPlayer
-
                     useController = true
-
                     controllerShowTimeoutMs = 4000
-
                     controllerHideOnTouch = true
-
                     keepScreenOn = true
                 }
             },
@@ -311,11 +283,6 @@ fun ExoVideoPlayer(
     }
 }
 
-
-/* ============================================================
-   VLC
-   ============================================================ */
-
 @Composable
 fun VlcVideoPlayer(
     videoUriString: String,
@@ -327,12 +294,7 @@ fun VlcVideoPlayer(
 ) {
     val context = LocalContext.current
 
-    /*
-     * LibVLC se crea una sola vez mientras esta pantalla
-     * permanezca activa.
-     */
     val libVLC = remember {
-
         LibVLC(
             context,
             arrayListOf(
@@ -345,9 +307,6 @@ fun VlcVideoPlayer(
         )
     }
 
-    /*
-     * Un único MediaPlayer para esta instancia del reproductor.
-     */
     val mediaPlayer = remember {
         MediaPlayer(libVLC)
     }
@@ -408,18 +367,11 @@ fun VlcVideoPlayer(
         MutableInteractionSource()
     }
 
-    /*
-     * Inicialización del medio.
-     *
-     * IMPORTANTE:
-     * No usamos FileDescriptor manualmente.
-     * VLC recibe directamente la URI content:// o file://.
-     */
     LaunchedEffect(videoUriString) {
-
         try {
-
-            mediaPlayer.stop()
+            if (mediaPlayer.isPlaying) {
+                mediaPlayer.stop()
+            }
 
             val uri = Uri.parse(videoUriString)
 
@@ -429,91 +381,71 @@ fun VlcVideoPlayer(
             )
 
             mediaPlayer.media = media
-
             media.release()
 
             mediaPlayer.play()
 
             if (startPositionMs > 0L) {
-
-                /*
-                 * Esperamos a que VLC tenga información
-                 * temporal antes de hacer seek.
-                 */
-                delay(300)
+                delay(500L)
 
                 try {
                     mediaPlayer.time = startPositionMs
                 } catch (_: Exception) {
                 }
             }
-
         } catch (e: Exception) {
-
             e.printStackTrace()
         }
     }
 
-    /*
-     * Eventos VLC.
-     */
     DisposableEffect(mediaPlayer) {
+        val mainHandler = Handler(Looper.getMainLooper())
 
         mediaPlayer.setEventListener { event ->
+            mainHandler.post {
+                when (event.type) {
+                    MediaPlayer.Event.Playing -> {
+                        isPlaying = true
+                    }
 
-            when (event.type) {
+                    MediaPlayer.Event.Paused -> {
+                        isPlaying = false
+                    }
 
-                MediaPlayer.Event.Playing -> {
-                    isPlaying = true
-                }
+                    MediaPlayer.Event.Stopped -> {
+                        isPlaying = false
+                    }
 
-                MediaPlayer.Event.Paused -> {
-                    isPlaying = false
-                }
+                    MediaPlayer.Event.EndReached -> {
+                        isPlaying = false
+                        onVideoEnded()
+                    }
 
-                MediaPlayer.Event.Stopped -> {
-                    isPlaying = false
-                }
+                    MediaPlayer.Event.LengthChanged -> {
+                        totalDurationMs =
+                            mediaPlayer.length.coerceAtLeast(0L)
+                    }
 
-                MediaPlayer.Event.EndReached -> {
-                    isPlaying = false
-                    onVideoEnded()
-                }
+                    MediaPlayer.Event.TimeChanged -> {
+                        currentTimeMs =
+                            mediaPlayer.time.coerceAtLeast(0L)
 
-                MediaPlayer.Event.LengthChanged -> {
-                    totalDurationMs =
-                        mediaPlayer.length.coerceAtLeast(0L)
-                }
+                        totalDurationMs =
+                            mediaPlayer.length.coerceAtLeast(0L)
+                    }
 
-                MediaPlayer.Event.TimeChanged -> {
-
-                    currentTimeMs =
-                        mediaPlayer.time.coerceAtLeast(0L)
-
-                    totalDurationMs =
-                        mediaPlayer.length.coerceAtLeast(0L)
-                }
-
-                MediaPlayer.Event.Vout -> {
-                    /*
-                     * Evento de salida de vídeo.
-                     * No hacemos detach/attach aquí porque
-                     * hacerlo durante reproducción puede provocar
-                     * pantalla negra.
-                     */
+                    MediaPlayer.Event.Vout -> {
+                    }
                 }
             }
         }
 
         onDispose {
-
             try {
-
                 onProgressUpdate(
                     mediaPlayer.time.coerceAtLeast(0L),
                     mediaPlayer.length.coerceAtLeast(0L)
                 )
-
             } catch (_: Exception) {
             }
 
@@ -539,20 +471,10 @@ fun VlcVideoPlayer(
         }
     }
 
-    /*
-     * Actualización de progreso.
-     *
-     * No dependemos exclusivamente de Event.TimeChanged.
-     * Esto mantiene actualizado el historial de reproducción.
-     */
     LaunchedEffect(mediaPlayer) {
-
         while (true) {
-
             try {
-
                 if (mediaPlayer.isPlaying) {
-
                     currentTimeMs =
                         mediaPlayer.time.coerceAtLeast(0L)
 
@@ -564,7 +486,6 @@ fun VlcVideoPlayer(
                         totalDurationMs
                     )
                 }
-
             } catch (_: Exception) {
             }
 
@@ -572,133 +493,88 @@ fun VlcVideoPlayer(
         }
     }
 
-    /*
-     * Ocultar controles automáticamente.
-     */
-    LaunchedEffect(
-        showControls,
-        isPlaying
-    ) {
-
+    LaunchedEffect(showControls, isPlaying) {
         if (showControls && isPlaying) {
-
             delay(5000L)
-
             showControls = false
         }
     }
 
-    /*
-     * Obtener pistas de audio/subtítulos.
-     */
-    LaunchedEffect(
-        mediaPlayer,
-        isPlaying
-    ) {
-
+    LaunchedEffect(mediaPlayer, isPlaying) {
         if (isPlaying) {
-
-            delay(800)
+            delay(800L)
 
             try {
-
-                val tracks =
-                    mediaPlayer.audioTracks
+                val tracks = mediaPlayer.audioTracks
 
                 if (tracks != null) {
-
-                    audioTracks =
-                        tracks
-                            .mapNotNull { track ->
-
-                                if (track != null) {
-                                    Pair(
-                                        track.id,
-                                        track.name ?: "Audio"
-                                    )
-                                } else {
-                                    null
-                                }
-                            }
+                    audioTracks = tracks.mapNotNull { track ->
+                        if (track != null) {
+                            Pair(
+                                track.id,
+                                track.name ?: "Audio"
+                            )
+                        } else {
+                            null
+                        }
+                    }
+                }
             } catch (_: Exception) {
             }
 
             try {
-
-                val tracks =
-                    mediaPlayer.spuTracks
+                val tracks = mediaPlayer.spuTracks
 
                 if (tracks != null) {
-
-                    subtitleTracks =
-                        tracks
-                            .mapNotNull { track ->
-
-                                if (track != null) {
-                                    Pair(
-                                        track.id,
-                                        track.name ?: "Subtítulos"
-                                    )
-                                } else {
-                                    null
-                                }
-                            }
+                    subtitleTracks = tracks.mapNotNull { track ->
+                        if (track != null) {
+                            Pair(
+                                track.id,
+                                track.name ?: "Subtítulos"
+                            )
+                        } else {
+                            null
+                        }
+                    }
                 }
-
             } catch (_: Exception) {
             }
         }
     }
 
-    /*
-     * Pantalla completa.
-     */
     fun setFullscreen(fullscreen: Boolean) {
-
-        val activity =
-            context as? Activity
-                ?: return
-
+        val activity = context as? Activity ?: return
         val window = activity.window
 
         if (fullscreen) {
-
             if (android.os.Build.VERSION.SDK_INT >= 30) {
-
                 window.insetsController?.let { controller ->
-
                     controller.hide(
                         WindowInsets.Type.statusBars() or
-                                WindowInsets.Type.navigationBars()
+                            WindowInsets.Type.navigationBars()
                     )
 
                     controller.systemBarsBehavior =
-                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        WindowInsetsController
+                            .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
-
             } else {
-
                 @Suppress("DEPRECATION")
                 window.decorView.systemUiVisibility =
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
-                            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             }
-
         } else {
-
             if (android.os.Build.VERSION.SDK_INT >= 30) {
-
                 window.insetsController?.show(
                     WindowInsets.Type.statusBars() or
-                            WindowInsets.Type.navigationBars()
+                        WindowInsets.Type.navigationBars()
                 )
-
             } else {
-
                 @Suppress("DEPRECATION")
                 window.decorView.systemUiVisibility =
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -719,16 +595,9 @@ fun VlcVideoPlayer(
                 showControls = !showControls
             }
     ) {
-
-        /*
-         * VLC VIDEO SURFACE
-         */
         AndroidView(
-
             factory = { ctx ->
-
                 VLCVideoLayout(ctx).apply {
-
                     keepScreenOn = true
 
                     try {
@@ -743,17 +612,9 @@ fun VlcVideoPlayer(
                     }
                 }
             },
-
             update = { layout ->
-
-                /*
-                 * Sólo reattach si realmente no existen
-                 * las vistas. No hacemos attach continuamente.
-                 */
                 try {
-
                     if (!mediaPlayer.vlcVout.areViewsAttached()) {
-
                         mediaPlayer.attachViews(
                             layout,
                             null,
@@ -761,61 +622,46 @@ fun VlcVideoPlayer(
                             false
                         )
                     }
-
                 } catch (e: Exception) {
-
                     e.printStackTrace()
                 }
             },
-
             modifier = Modifier.fillMaxSize()
         )
 
-        /*
-         * MENÚ DE VELOCIDAD
-         */
         DropdownMenu(
             expanded = showSpeedMenu,
             onDismissRequest = {
                 showSpeedMenu = false
             },
             modifier = Modifier
-                .background(
-                    Color(0xFF202020)
-                )
+                .background(Color(0xFF202020))
                 .align(Alignment.TopEnd)
         ) {
-
-            val speeds =
-                listOf(
-                    0.5f,
-                    0.75f,
-                    1.0f,
-                    1.25f,
-                    1.5f,
-                    2.0f
-                )
+            val speeds = listOf(
+                0.5f,
+                0.75f,
+                1.0f,
+                1.25f,
+                1.5f,
+                2.0f
+            )
 
             speeds.forEach { selectedSpeed ->
-
                 DropdownMenuItem(
-
                     text = {
                         Text(
-                            text =
-                                if (selectedSpeed == 1f)
-                                    "Normal"
-                                else
-                                    "${selectedSpeed}x",
+                            text = if (selectedSpeed == 1f) {
+                                "Normal"
+                            } else {
+                                "${selectedSpeed}x"
+                            },
                             color = Color.White
                         )
                     },
-
                     onClick = {
-
                         try {
-                            mediaPlayer.rate =
-                                selectedSpeed
+                            mediaPlayer.rate = selectedSpeed
                         } catch (_: Exception) {
                         }
 
@@ -826,9 +672,6 @@ fun VlcVideoPlayer(
             }
         }
 
-        /*
-         * MENÚ DE AUDIO
-         */
         DropdownMenu(
             expanded = showAudioMenu,
             onDismissRequest = {
@@ -838,9 +681,7 @@ fun VlcVideoPlayer(
                 .background(Color(0xFF202020))
                 .align(Alignment.TopEnd)
         ) {
-
             if (audioTracks.isEmpty()) {
-
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -852,22 +693,16 @@ fun VlcVideoPlayer(
                         showAudioMenu = false
                     }
                 )
-
             } else {
-
                 audioTracks.forEach { track ->
-
                     DropdownMenuItem(
-
                         text = {
                             Text(
                                 track.second,
                                 color = Color.White
                             )
                         },
-
                         onClick = {
-
                             try {
                                 mediaPlayer.setAudioTrack(
                                     track.first
@@ -882,9 +717,6 @@ fun VlcVideoPlayer(
             }
         }
 
-        /*
-         * MENÚ DE SUBTÍTULOS
-         */
         DropdownMenu(
             expanded = showSubtitleMenu,
             onDismissRequest = {
@@ -894,9 +726,7 @@ fun VlcVideoPlayer(
                 .background(Color(0xFF202020))
                 .align(Alignment.TopEnd)
         ) {
-
             if (subtitleTracks.isEmpty()) {
-
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -908,22 +738,16 @@ fun VlcVideoPlayer(
                         showSubtitleMenu = false
                     }
                 )
-
             } else {
-
                 subtitleTracks.forEach { track ->
-
                     DropdownMenuItem(
-
                         text = {
                             Text(
                                 track.second,
                                 color = Color.White
                             )
                         },
-
                         onClick = {
-
                             try {
                                 mediaPlayer.setSpuTrack(
                                     track.first
@@ -938,104 +762,60 @@ fun VlcVideoPlayer(
             }
         }
 
-        /*
-         * CONTROLES
-         */
         if (showControls) {
-
             PlayerControlsOverlay(
-
                 title = title,
-
                 isPlaying = isPlaying,
-
                 currentTimeMs = currentTimeMs,
-
                 totalDurationMs = totalDurationMs,
-
                 isMuted = isMuted,
-
                 volume = volume,
-
                 speed = speed,
-
                 isFullscreen = isFullscreen,
-
                 onPlayPauseToggle = {
-
                     try {
-
                         if (mediaPlayer.isPlaying) {
-
                             mediaPlayer.pause()
-
                         } else {
-
                             mediaPlayer.play()
                         }
-
                     } catch (_: Exception) {
                     }
                 },
-
                 onRewind = {
-
                     try {
+                        val newTime = (
+                            mediaPlayer.time - 10_000L
+                        ).coerceAtLeast(0L)
 
-                        val newTime =
-                            (
-                                    mediaPlayer.time - 10_000L
-                                    ).coerceAtLeast(0L)
-
-                        mediaPlayer.time =
-                            newTime
-
-                        currentTimeMs =
-                            newTime
-
+                        mediaPlayer.time = newTime
+                        currentTimeMs = newTime
                     } catch (_: Exception) {
                     }
                 },
-
                 onForward = {
-
                     try {
-
                         val duration =
                             mediaPlayer.length
                                 .coerceAtLeast(0L)
 
-                        val newTime =
-                            (
-                                    mediaPlayer.time + 10_000L
-                                    ).coerceAtMost(duration)
+                        val newTime = (
+                            mediaPlayer.time + 10_000L
+                        ).coerceAtMost(duration)
 
-                        mediaPlayer.time =
-                            newTime
-
-                        currentTimeMs =
-                            newTime
-
+                        mediaPlayer.time = newTime
+                        currentTimeMs = newTime
                     } catch (_: Exception) {
                     }
                 },
-
                 onSeek = { newPosition ->
-
                     try {
-
-                        mediaPlayer.time =
-                            newPosition
-
-                        currentTimeMs =
-                            newPosition
-
+                        mediaPlayer.time = newPosition
+                        currentTimeMs = newPosition
                     } catch (_: Exception) {
                     }
                 },
-
                 onVolumeChange = { newVolume ->
-
                     val audioManager =
                         context.getSystemService(
                             Context.AUDIO_SERVICE
@@ -1046,16 +826,11 @@ fun VlcVideoPlayer(
                             AudioManager.STREAM_MUSIC
                         )
 
-                    val androidVolume =
-                        (
-                                newVolume / 100f *
-                                        maxVolume
-                                )
-                            .toInt()
-                            .coerceIn(
-                                0,
-                                maxVolume
-                            )
+                    val androidVolume = (
+                        newVolume / 100f * maxVolume
+                    )
+                        .toInt()
+                        .coerceIn(0, maxVolume)
 
                     audioManager.setStreamVolume(
                         AudioManager.STREAM_MUSIC,
@@ -1064,12 +839,9 @@ fun VlcVideoPlayer(
                     )
 
                     volume = newVolume
-
                     isMuted = newVolume == 0
                 },
-
                 onMuteToggle = {
-
                     val audioManager =
                         context.getSystemService(
                             Context.AUDIO_SERVICE
@@ -1081,14 +853,11 @@ fun VlcVideoPlayer(
                         )
 
                     if (isMuted) {
-
-                        val restored =
-                            (
-                                    maxVolume *
-                                            0.7f
-                                    )
-                                .toInt()
-                                .coerceAtLeast(1)
+                        val restored = (
+                            maxVolume * 0.7f
+                        )
+                            .toInt()
+                            .coerceAtLeast(1)
 
                         audioManager.setStreamVolume(
                             AudioManager.STREAM_MUSIC,
@@ -1096,18 +865,15 @@ fun VlcVideoPlayer(
                             0
                         )
 
-                        volume =
-                            (
-                                    restored.toFloat() /
-                                            maxVolume *
-                                            100f
-                                    )
-                                .toInt()
+                        volume = (
+                            restored.toFloat() /
+                                maxVolume *
+                                100f
+                        )
+                            .toInt()
 
                         isMuted = false
-
                     } else {
-
                         audioManager.setStreamVolume(
                             AudioManager.STREAM_MUSIC,
                             0,
@@ -1115,46 +881,30 @@ fun VlcVideoPlayer(
                         )
 
                         volume = 0
-
                         isMuted = true
                     }
                 },
-
                 onSpeedClick = {
                     showSpeedMenu = true
                 },
-
                 onAudioClick = {
-
                     if (audioTracks.isNotEmpty()) {
                         showAudioMenu = true
                     }
                 },
-
                 onSubtitleClick = {
-
                     if (subtitleTracks.isNotEmpty()) {
                         showSubtitleMenu = true
                     }
                 },
-
                 onFullscreenToggle = {
-
-                    setFullscreen(
-                        !isFullscreen
-                    )
+                    setFullscreen(!isFullscreen)
                 },
-
                 onBack = onBack
             )
         }
     }
 }
-
-
-/* ============================================================
-   CONTROLES ESTILO NETFLIX
-   ============================================================ */
 
 @Composable
 fun PlayerControlsOverlay(
@@ -1178,431 +928,262 @@ fun PlayerControlsOverlay(
     onFullscreenToggle: () -> Unit,
     onBack: () -> Unit
 ) {
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Color.Black.copy(
-                    alpha = 0.48f
-                )
+                Color.Black.copy(alpha = 0.48f)
             )
             .padding(
                 horizontal = 24.dp,
                 vertical = 18.dp
             )
     ) {
-
-        /*
-         * CABECERA
-         */
         Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .align(
-                    Alignment.TopCenter
-                )
+                .align(Alignment.TopCenter)
         ) {
-
             IconButton(
                 onClick = onBack
             ) {
-
                 Icon(
                     Icons.Default.ArrowBack,
-                    contentDescription =
-                        "Volver",
+                    contentDescription = "Volver",
                     tint = Color.White,
-                    modifier =
-                        Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
             Spacer(
-                modifier =
-                    Modifier.width(10.dp)
+                modifier = Modifier.width(10.dp)
             )
 
             Text(
                 text = title,
                 color = Color.White,
                 fontSize = 20.sp,
-                fontWeight =
-                    FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
         }
 
-
-        /*
-         * CONTROLES CENTRALES
-         */
         Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-
-            horizontalArrangement =
-                Arrangement.Center,
-
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .align(
-                    Alignment.Center
-                )
+                .align(Alignment.Center)
         ) {
-
             IconButton(
                 onClick = onRewind,
-                modifier =
-                    Modifier.size(64.dp)
+                modifier = Modifier.size(64.dp)
             ) {
-
                 Icon(
                     Icons.Default.Replay10,
-                    contentDescription =
-                        "Retroceder 10 segundos",
+                    contentDescription = "Retroceder 10 segundos",
                     tint = Color.White,
-                    modifier =
-                        Modifier.size(42.dp)
+                    modifier = Modifier.size(42.dp)
                 )
             }
 
             Spacer(
-                modifier =
-                    Modifier.width(28.dp)
+                modifier = Modifier.width(28.dp)
             )
 
             IconButton(
-
-                onClick =
-                    onPlayPauseToggle,
-
-                modifier =
-                    Modifier
-                        .size(74.dp)
-                        .background(
-                            Color.White,
-                            CircleShape
-                        )
+                onClick = onPlayPauseToggle,
+                modifier = Modifier
+                    .size(74.dp)
+                    .background(
+                        Color.White,
+                        CircleShape
+                    )
             ) {
-
                 Icon(
-                    imageVector =
-                        if (isPlaying)
-                            Icons.Default.Pause
-                        else
-                            Icons.Default.PlayArrow,
-
-                    contentDescription =
-                        if (isPlaying)
-                            "Pausar"
-                        else
-                            "Reproducir",
-
+                    imageVector = if (isPlaying) {
+                        Icons.Default.Pause
+                    } else {
+                        Icons.Default.PlayArrow
+                    },
+                    contentDescription = if (isPlaying) {
+                        "Pausar"
+                    } else {
+                        "Reproducir"
+                    },
                     tint = Color.Black,
-
-                    modifier =
-                        Modifier.size(46.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
 
             Spacer(
-                modifier =
-                    Modifier.width(28.dp)
+                modifier = Modifier.width(28.dp)
             )
 
             IconButton(
                 onClick = onForward,
-                modifier =
-                    Modifier.size(64.dp)
+                modifier = Modifier.size(64.dp)
             ) {
-
                 Icon(
                     Icons.Default.Forward10,
-                    contentDescription =
-                        "Adelantar 10 segundos",
+                    contentDescription = "Adelantar 10 segundos",
                     tint = Color.White,
-                    modifier =
-                        Modifier.size(42.dp)
+                    modifier = Modifier.size(42.dp)
                 )
             }
         }
 
-
-        /*
-         * BARRA INFERIOR
-         */
         Column(
-
             modifier = Modifier
                 .fillMaxWidth()
-                .align(
-                    Alignment.BottomCenter
-                )
+                .align(Alignment.BottomCenter)
         ) {
-
-            /*
-             * SLIDER
-             */
             Slider(
-
-                value =
-                    if (totalDurationMs > 0L)
-                        (
-                                currentTimeMs.toFloat() /
-                                        totalDurationMs.toFloat()
-                                )
-                            .coerceIn(0f, 1f)
-                    else
-                        0f,
-
+                value = if (totalDurationMs > 0L) {
+                    (
+                        currentTimeMs.toFloat() /
+                            totalDurationMs.toFloat()
+                    ).coerceIn(0f, 1f)
+                } else {
+                    0f
+                },
                 onValueChange = { fraction ->
-
                     if (totalDurationMs > 0L) {
-
                         onSeek(
                             (
-                                    fraction *
-                                            totalDurationMs
-                                    ).toLong()
+                                fraction *
+                                    totalDurationMs
+                            ).toLong()
                         )
                     }
                 },
-
-                colors =
-                    SliderDefaults.colors(
-
-                        thumbColor =
-                            Color(0xFFE50914),
-
-                        activeTrackColor =
-                            Color(0xFFE50914),
-
-                        inactiveTrackColor =
-                            Color.White.copy(
-                                alpha = 0.35f
-                            )
-                    ),
-
-                modifier =
-                    Modifier.fillMaxWidth()
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFE50914),
+                    activeTrackColor = Color(0xFFE50914),
+                    inactiveTrackColor =
+                        Color.White.copy(alpha = 0.35f)
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
 
-
-            /*
-             * TIEMPOS
-             */
             Row(
-
-                modifier =
-                    Modifier.fillMaxWidth(),
-
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement =
                     Arrangement.SpaceBetween
             ) {
-
                 Text(
-                    formatTime(
-                        currentTimeMs
-                    ),
+                    formatTime(currentTimeMs),
                     color = Color.White,
                     fontSize = 12.sp
                 )
 
                 Text(
-                    formatTime(
-                        totalDurationMs
-                    ),
+                    formatTime(totalDurationMs),
                     color = Color.White,
                     fontSize = 12.sp
                 )
             }
 
-
             Spacer(
-                modifier =
-                    Modifier.height(8.dp)
+                modifier = Modifier.height(8.dp)
             )
 
-
-            /*
-             * HERRAMIENTAS
-             */
             Row(
-
-                verticalAlignment =
-                    Alignment.CenterVertically,
-
-                horizontalArrangement =
-                    Arrangement.End,
-
-                modifier =
-                    Modifier.fillMaxWidth()
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth()
             ) {
-
-                /*
-                 * VOLUMEN
-                 */
                 IconButton(
-                    onClick =
-                        onMuteToggle
+                    onClick = onMuteToggle
                 ) {
-
                     Icon(
+                        imageVector = when {
+                            isMuted ->
+                                Icons.Default.VolumeOff
 
-                        imageVector =
-                            when {
-                                isMuted ->
-                                    Icons.Default.VolumeOff
+                            volume < 50 ->
+                                Icons.Default.VolumeDown
 
-                                volume < 50 ->
-                                    Icons.Default.VolumeDown
-
-                                else ->
-                                    Icons.Default.VolumeUp
-                            },
-
-                        contentDescription =
-                            "Volumen",
-
-                        tint =
-                            Color.White
+                            else ->
+                                Icons.Default.VolumeUp
+                        },
+                        contentDescription = "Volumen",
+                        tint = Color.White
                     )
                 }
 
-
-                /*
-                 * INDICADOR DE VOLUMEN
-                 */
                 Text(
-                    text =
-                        "$volume%",
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        12.sp
+                    text = "$volume%",
+                    color = Color.White,
+                    fontSize = 12.sp
                 )
-
 
                 Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
+                    modifier = Modifier.width(8.dp)
                 )
 
-
-                /*
-                 * VELOCIDAD
-                 */
                 IconButton(
-                    onClick =
-                        onSpeedClick
+                    onClick = onSpeedClick
                 ) {
-
                     Icon(
                         Icons.Default.Speed,
-                        contentDescription =
-                            "Velocidad",
-
-                        tint =
-                            Color.White
+                        contentDescription = "Velocidad",
+                        tint = Color.White
                     )
                 }
 
                 Text(
-                    text =
-                        if (speed == 1f)
-                            "1x"
-                        else
-                            "${speed}x",
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        12.sp
+                    text = if (speed == 1f) {
+                        "1x"
+                    } else {
+                        "${speed}x"
+                    },
+                    color = Color.White,
+                    fontSize = 12.sp
                 )
-
 
                 Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
+                    modifier = Modifier.width(8.dp)
                 )
 
-
-                /*
-                 * AUDIO
-                 */
                 IconButton(
-                    onClick =
-                        onAudioClick
+                    onClick = onAudioClick
                 ) {
-
                     Icon(
                         Icons.Default.AudioFile,
-                        contentDescription =
-                            "Audio",
-
-                        tint =
-                            Color.White
+                        contentDescription = "Audio",
+                        tint = Color.White
                     )
                 }
 
-
-                /*
-                 * SUBTÍTULOS
-                 */
                 IconButton(
-                    onClick =
-                        onSubtitleClick
+                    onClick = onSubtitleClick
                 ) {
-
                     Icon(
                         Icons.Default.ClosedCaption,
-                        contentDescription =
-                            "Subtítulos",
-
-                        tint =
-                            Color.White
+                        contentDescription = "Subtítulos",
+                        tint = Color.White
                     )
                 }
 
-
-                /*
-                 * FULLSCREEN
-                 */
                 IconButton(
-                    onClick =
-                        onFullscreenToggle
+                    onClick = onFullscreenToggle
                 ) {
-
                     Icon(
-
-                        imageVector =
-                            if (isFullscreen)
-                                Icons.Default.FullscreenExit
-                            else
-                                Icons.Default.Fullscreen,
-
-                        contentDescription =
-                            "Pantalla completa",
-
-                        tint =
-                            Color.White
+                        imageVector = if (isFullscreen) {
+                            Icons.Default.FullscreenExit
+                        } else {
+                            Icons.Default.Fullscreen
+                        },
+                        contentDescription = "Pantalla completa",
+                        tint = Color.White
                     )
                 }
             }
         }
     }
 }
-
-
-/* ============================================================
-   SIGUIENTE EPISODIO
-   ============================================================ */
 
 @Composable
 fun NextEpisodeOverlay(
@@ -1611,267 +1192,163 @@ fun NextEpisodeOverlay(
     onPlayNow: () -> Unit,
     onCancel: () -> Unit
 ) {
-
     var secondsLeft by remember {
         mutableIntStateOf(10)
     }
 
     LaunchedEffect(secondsLeft) {
-
         if (secondsLeft > 0) {
-
             delay(1000L)
-
             secondsLeft--
-
         } else {
-
             onPlayNow()
         }
     }
 
     Box(
-
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Color.Black.copy(
-                        alpha = 0.88f
-                    )
-                ),
-
-        contentAlignment =
-            Alignment.BottomEnd
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Color.Black.copy(alpha = 0.88f)
+            ),
+        contentAlignment = Alignment.BottomEnd
     ) {
-
         Column(
-
-            modifier =
-                Modifier
-                    .padding(24.dp)
-                    .width(380.dp)
-                    .clip(
-                        RoundedCornerShape(16.dp)
-                    )
-                    .background(
-                        Color(0xFF181818)
-                    )
-                    .padding(18.dp)
+            modifier = Modifier
+                .padding(24.dp)
+                .width(380.dp)
+                .clip(
+                    RoundedCornerShape(16.dp)
+                )
+                .background(
+                    Color(0xFF181818)
+                )
+                .padding(18.dp)
         ) {
-
             Text(
-                text =
-                    "Siguiente episodio",
-
-                color =
-                    Color.White,
-
-                fontSize =
-                    18.sp,
-
-                fontWeight =
-                    FontWeight.Bold
+                text = "Siguiente episodio",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
 
             Spacer(
-                modifier =
-                    Modifier.height(6.dp)
+                modifier = Modifier.height(6.dp)
             )
 
             Text(
-                text =
-                    "Comienza en ${secondsLeft}s",
-
-                color =
-                    Color.Gray,
-
-                fontSize =
-                    13.sp
+                text = "Comienza en ${secondsLeft}s",
+                color = Color.Gray,
+                fontSize = 13.sp
             )
 
             Spacer(
-                modifier =
-                    Modifier.height(14.dp)
+                modifier = Modifier.height(14.dp)
             )
 
             Row(
-
-                verticalAlignment =
-                    Alignment.CenterVertically,
-
-                modifier =
-                    Modifier.fillMaxWidth()
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-
                 Box(
-
-                    modifier =
-                        Modifier
-                            .width(110.dp)
-                            .height(65.dp)
-                            .clip(
-                                RoundedCornerShape(8.dp)
-                            )
-                            .background(
-                                Color(0xFF303030)
-                            )
-                ) {
-
-                    if (posterUri != null) {
-
-                        AsyncImage(
-
-                            model =
-                                posterUri,
-
-                            contentDescription =
-                                null,
-
-                            contentScale =
-                                ContentScale.Crop,
-
-                            modifier =
-                                Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .width(110.dp)
+                        .height(65.dp)
+                        .clip(
+                            RoundedCornerShape(8.dp)
                         )
-
+                        .background(
+                            Color(0xFF303030)
+                        )
+                ) {
+                    if (posterUri != null) {
+                        AsyncImage(
+                            model = posterUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else {
-
                         Icon(
                             Icons.Default.PlayArrow,
-                            contentDescription =
-                                null,
-
-                            tint =
-                                Color.White,
-
-                            modifier =
-                                Modifier
-                                    .size(32.dp)
-                                    .align(
-                                        Alignment.Center
-                                    )
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .align(Alignment.Center)
                         )
                     }
                 }
 
                 Spacer(
-                    modifier =
-                        Modifier.width(14.dp)
+                    modifier = Modifier.width(14.dp)
                 )
 
                 Text(
-                    text =
-                        nextTitle,
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        15.sp,
-
-                    fontWeight =
-                        FontWeight.SemiBold,
-
-                    modifier =
-                        Modifier.weight(1f)
+                    text = nextTitle,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
             Spacer(
-                modifier =
-                    Modifier.height(18.dp)
+                modifier = Modifier.height(18.dp)
             )
 
             Row(
-
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                horizontalArrangement =
-                    Arrangement.End
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-
                 Button(
-
-                    onClick =
-                        onCancel,
-
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                Color(0xFF333333)
-                        )
+                    onClick = onCancel,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF333333)
+                    )
                 ) {
-
                     Text(
                         "Cancelar",
-                        color =
-                            Color.White
+                        color = Color.White
                     )
                 }
 
                 Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
+                    modifier = Modifier.width(8.dp)
                 )
 
                 Button(
-
-                    onClick =
-                        onPlayNow,
-
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                Color(0xFFE50914)
-                        )
+                    onClick = onPlayNow,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE50914)
+                    )
                 ) {
-
                     Icon(
                         Icons.Default.PlayArrow,
-                        contentDescription =
-                            null
+                        contentDescription = null
                     )
 
                     Spacer(
-                        modifier =
-                            Modifier.width(4.dp)
+                        modifier = Modifier.width(4.dp)
                     )
 
-                    Text(
-                        "Reproducir"
-                    )
+                    Text("Reproducir")
                 }
             }
         }
     }
 }
 
+private fun formatTime(ms: Long): String {
+    val totalSeconds = (
+        ms / 1000L
+    ).coerceAtLeast(0L)
 
-/* ============================================================
-   FORMATO DE TIEMPO
-   ============================================================ */
-
-private fun formatTime(
-    ms: Long
-): String {
-
-    val totalSeconds =
-        (ms / 1000L)
-            .coerceAtLeast(0L)
-
-    val seconds =
-        totalSeconds % 60L
-
-    val minutes =
-        totalSeconds / 60L
-
-    val hours =
-        minutes / 60L
+    val seconds = totalSeconds % 60L
+    val minutes = totalSeconds / 60L
+    val hours = minutes / 60L
 
     return if (hours > 0L) {
-
         String.format(
             Locale.US,
             "%d:%02d:%02d",
@@ -1879,9 +1356,7 @@ private fun formatTime(
             minutes % 60L,
             seconds
         )
-
     } else {
-
         String.format(
             Locale.US,
             "%02d:%02d",
