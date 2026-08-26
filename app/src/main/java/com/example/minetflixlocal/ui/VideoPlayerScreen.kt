@@ -1,2185 +1,529 @@
-package com.example.minetflixlocal.ui
+package com.example.minetflixlocal
 
-import android.app.Activity
-import android.content.Context
-import android.media.AudioManager
-import android.net.Uri
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
-import android.view.WindowManager
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
-import kotlinx.coroutines.delay
-import org.videolan.libvlc.LibVLC
-import org.videolan.libvlc.Media
-import org.videolan.libvlc.MediaPlayer
-import org.videolan.libvlc.util.VLCVideoLayout
-import java.util.Locale
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.*
+import androidx.core.content.ContextCompat
+import com.example.minetflixlocal.model.Episode
+import com.example.minetflixlocal.model.MediaSeries
+import com.example.minetflixlocal.ui.VideoPlayerScreen
+import com.example.minetflixlocal.util.LocalVideo
+import com.example.minetflixlocal.util.VideoScanner
 
-@Composable
-fun VideoPlayerScreen(
-    videoUriString: String,
-    title: String = "Video",
-    engine: String = "EXOPLAYER",
-    startPositionMs: Long = 0L,
-    nextEpisodeTitle: String? = null,
-    nextEpisodePosterUri: Uri? = null,
-    onProgressUpdate: (Long, Long) -> Unit,
-    onNextEpisode: (() -> Unit)? = null,
-    onBack: () -> Unit
-) {
-    val context = LocalContext.current
+class MainActivity : ComponentActivity() {
 
-    var showNextOverlay by remember(videoUriString) {
-        mutableStateOf(false)
-    }
+    private val permissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) {
+            // El escaneo se realiza desde la interfaz
+        }
 
-    /*
-     * IMPORTANTE:
-     *
-     * Android MediaStore normalmente entrega:
-     *
-     * content://...
-     *
-     * ExoPlayer trabaja muy bien con estas URI.
-     *
-     * VLC puede tener problemas dependiendo del proveedor
-     * de contenido y de los permisos.
-     *
-     * Por eso, si recibimos content:// forzamos ExoPlayer.
-     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    val parsedUri = remember(videoUriString) {
-        Uri.parse(videoUriString)
-    }
+        requestVideoPermission()
 
-    val effectiveEngine = remember(
-        videoUriString,
-        engine
-    ) {
-        if (parsedUri.scheme.equals("content", ignoreCase = true)) {
-            "EXOPLAYER"
-        } else {
-            engine.uppercase(Locale.US)
+        setContent {
+            NetflixLocalApp()
         }
     }
 
-    LaunchedEffect(videoUriString) {
-        showNextOverlay = false
-    }
+    private fun requestVideoPermission() {
 
-    DisposableEffect(Unit) {
-        val activity = context as? Activity
-        val window = activity?.window
-
-        window?.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        )
-
-        onDispose {
-            window?.clearFlags(
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-        }
-    }
-
-    BackHandler {
-        onBack()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-
-        if (videoUriString.isBlank()) {
-
-            Text(
-                text = "No se encontró el archivo de video.",
-                color = Color.White,
-                modifier = Modifier.align(Alignment.Center)
-            )
-
-        } else {
-
-            if (effectiveEngine == "VLC") {
-
-                VlcVideoPlayer(
-                    videoUriString = videoUriString,
-                    title = title,
-                    startPositionMs = startPositionMs,
-                    onProgressUpdate = onProgressUpdate,
-                    onBack = onBack,
-                    onVideoEnded = {
-                        if (onNextEpisode != null) {
-                            showNextOverlay = true
-                        } else {
-                            onBack()
-                        }
-                    }
-                )
-
+        val permission =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_VIDEO
             } else {
-
-                ExoVideoPlayer(
-                    videoUriString = videoUriString,
-                    title = title,
-                    startPositionMs = startPositionMs,
-                    onProgressUpdate = onProgressUpdate,
-                    onBack = onBack,
-                    onVideoEnded = {
-                        if (onNextEpisode != null) {
-                            showNextOverlay = true
-                        } else {
-                            onBack()
-                        }
-                    }
-                )
+                Manifest.permission.READ_EXTERNAL_STORAGE
             }
-        }
 
         if (
-            showNextOverlay &&
-            onNextEpisode != null
+            ContextCompat.checkSelfPermission(
+                this,
+                permission
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
-
-            NextEpisodeOverlay(
-                nextTitle =
-                    nextEpisodeTitle
-                        ?: "Siguiente episodio",
-
-                posterUri =
-                    nextEpisodePosterUri,
-
-                onPlayNow = {
-                    showNextOverlay = false
-                    onNextEpisode()
-                },
-
-                onCancel = {
-                    showNextOverlay = false
-                    onBack()
-                }
-            )
+            permissionLauncher.launch(permission)
         }
     }
 }
 
+
 /* =========================================================
- * EXOPLAYER
+ * ESTADO PRINCIPAL DE LA APLICACIÓN
  * ========================================================= */
 
 @Composable
-private fun ExoVideoPlayer(
-    videoUriString: String,
-    title: String,
-    startPositionMs: Long,
-    onProgressUpdate: (Long, Long) -> Unit,
-    onBack: () -> Unit,
-    onVideoEnded: () -> Unit
-) {
-    val context = LocalContext.current
+private fun NetflixLocalApp() {
 
-    val exoPlayer = remember(videoUriString) {
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-        ExoPlayer
-            .Builder(context)
-            .build()
-            .apply {
-
-                val uri =
-                    Uri.parse(videoUriString)
-
-                val mediaItem =
-                    MediaItem
-                        .Builder()
-                        .setUri(uri)
-                        .build()
-
-                setMediaItem(mediaItem)
-
-                prepare()
-
-                if (startPositionMs > 0L) {
-                    seekTo(startPositionMs)
-                }
-
-                playWhenReady = true
-            }
+    var currentScreen by remember {
+        mutableStateOf("HOME")
     }
 
-    var isPlaying by remember {
-        mutableStateOf(true)
+    /*
+     * Motor seleccionado.
+     *
+     * EXOPLAYER queda como predeterminado.
+     */
+    var selectedEngine by remember {
+        mutableStateOf("EXOPLAYER")
     }
 
-    var currentPosition by remember {
-        mutableLongStateOf(
-            startPositionMs
-        )
-    }
-
-    var duration by remember {
-        mutableLongStateOf(0L)
-    }
-
-    DisposableEffect(exoPlayer) {
-
-        val listener =
-            object : Player.Listener {
-
-                override fun onIsPlayingChanged(
-                    playing: Boolean
-                ) {
-                    isPlaying = playing
-                }
-
-                override fun onPlaybackStateChanged(
-                    state: Int
-                ) {
-
-                    if (
-                        state ==
-                        Player.STATE_READY
-                    ) {
-                        duration =
-                            exoPlayer.duration
-                                .takeIf {
-                                    it > 0L
-                                }
-                                ?: 0L
-                    }
-
-                    if (
-                        state ==
-                        Player.STATE_ENDED
-                    ) {
-                        onVideoEnded()
-                    }
-                }
-            }
-
-        exoPlayer.addListener(listener)
-
-        onDispose {
-
-            try {
-
-                onProgressUpdate(
-                    exoPlayer.currentPosition,
-                    exoPlayer.duration
-                        .takeIf { it > 0L }
-                        ?: 0L
-                )
-
-            } catch (_: Exception) {
-            }
-
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
-
-    LaunchedEffect(exoPlayer) {
-
-        while (true) {
-
-            try {
-
-                currentPosition =
-                    exoPlayer.currentPosition
-                        .coerceAtLeast(0L)
-
-                duration =
-                    exoPlayer.duration
-                        .takeIf { it > 0L }
-                        ?: 0L
-
-                onProgressUpdate(
-                    currentPosition,
-                    duration
-                )
-
-            } catch (_: Exception) {
-            }
-
-            delay(1000L)
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
-
-        AndroidView(
-
-            factory = { ctx ->
-
-                PlayerView(ctx).apply {
-
-                    player = exoPlayer
-
-                    useController = true
-
-                    controllerShowTimeoutMs =
-                        4000
-
-                    controllerHideOnTouch =
-                        true
-
-                    keepScreenOn = true
-
-                    setShowBuffering(
-                        PlayerView.SHOW_BUFFERING_WHEN_PLAYING
-                    )
-                }
-            },
-
-            update = { view ->
-
-                view.player =
-                    exoPlayer
-            },
-
-            modifier =
-                Modifier.fillMaxSize()
-        )
-
-        IconButton(
-
-            onClick = onBack,
-
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-        ) {
-
-            Icon(
-                imageVector =
-                    Icons.Default.ArrowBack,
-
-                contentDescription =
-                    "Volver",
-
-                tint =
-                    Color.White
-            )
-        }
-    }
-}
-
-/* =========================================================
- * VLC
- * ========================================================= */
-
-@Composable
-private fun VlcVideoPlayer(
-    videoUriString: String,
-    title: String,
-    startPositionMs: Long,
-    onProgressUpdate: (Long, Long) -> Unit,
-    onBack: () -> Unit,
-    onVideoEnded: () -> Unit
-) {
-    val context = LocalContext.current
-
-    val libVLC =
-        remember {
-
-            LibVLC(
-                context,
-                arrayListOf(
-                    "--no-drop-late-frames",
-                    "--no-skip-frames",
-                    "--network-caching=1000",
-                    "--clock-jitter=0",
-                    "--clock-synchro=0"
-                )
-            )
-        }
-
-    val mediaPlayer =
-        remember {
-
-            MediaPlayer(libVLC)
-        }
-
-    var videoReady by remember {
-        mutableStateOf(false)
-    }
-
-    var isPlaying by remember {
-        mutableStateOf(false)
-    }
-
-    var currentTimeMs by remember {
-        mutableLongStateOf(0L)
-    }
-
-    var totalDurationMs by remember {
-        mutableLongStateOf(0L)
-    }
-
-    var isMuted by remember {
-        mutableStateOf(false)
-    }
-
-    var volume by remember {
-        mutableIntStateOf(100)
-    }
-
-    var speed by remember {
-        mutableFloatStateOf(1f)
-    }
-
-    var showControls by remember {
-        mutableStateOf(true)
-    }
-
-    var isFullscreen by remember {
-        mutableStateOf(false)
-    }
-
-    var showSpeedMenu by remember {
-        mutableStateOf(false)
-    }
-
-    var showAudioMenu by remember {
-        mutableStateOf(false)
-    }
-
-    var showSubtitleMenu by remember {
-        mutableStateOf(false)
-    }
-
-    var audioTracks by remember {
-        mutableStateOf<List<Pair<Int, String>>>(
+    /*
+     * Videos detectados.
+     */
+    var localVideos by remember {
+        mutableStateOf<List<LocalVideo>>(
             emptyList()
         )
     }
 
-    var subtitleTracks by remember {
-        mutableStateOf<List<Pair<Int, String>>>(
+    /*
+     * Series construidas por VideoScanner.
+     */
+    var mediaSeries by remember {
+        mutableStateOf<List<MediaSeries>>(
             emptyList()
         )
     }
 
-    val interactionSource =
-        remember {
-            MutableInteractionSource()
-        }
-
     /*
-     * Listener VLC
+     * Películas:
+     * vídeos que no pertenecen a una carpeta
+     * con múltiples elementos.
      */
-
-    DisposableEffect(mediaPlayer) {
-
-        val listener =
-            MediaPlayer.EventListener { event ->
-
-                when (event.type) {
-
-                    MediaPlayer.Event.Playing -> {
-
-                        isPlaying = true
-                    }
-
-                    MediaPlayer.Event.Paused -> {
-
-                        isPlaying = false
-                    }
-
-                    MediaPlayer.Event.Stopped -> {
-
-                        isPlaying = false
-                    }
-
-                    MediaPlayer.Event.EndReached -> {
-
-                        isPlaying = false
-
-                        onVideoEnded()
-                    }
-
-                    MediaPlayer.Event.LengthChanged -> {
-
-                        try {
-
-                            totalDurationMs =
-                                mediaPlayer.length
-                                    .coerceAtLeast(0L)
-
-                        } catch (_: Exception) {
-                        }
-                    }
-
-                    MediaPlayer.Event.TimeChanged -> {
-
-                        try {
-
-                            currentTimeMs =
-                                mediaPlayer.time
-                                    .coerceAtLeast(0L)
-
-                            totalDurationMs =
-                                mediaPlayer.length
-                                    .coerceAtLeast(0L)
-
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
-            }
-
-        mediaPlayer.setEventListener(listener)
-
-        onDispose {
-
-            try {
-
-                onProgressUpdate(
-                    mediaPlayer.time
-                        .coerceAtLeast(0L),
-
-                    mediaPlayer.length
-                        .coerceAtLeast(0L)
-                )
-
-            } catch (_: Exception) {
-            }
-
-            try {
-
-                if (
-                    mediaPlayer.isPlaying
-                ) {
-                    mediaPlayer.stop()
-                }
-
-            } catch (_: Exception) {
-            }
-
-            try {
-
-                if (
-                    mediaPlayer.vlcVout
-                        .areViewsAttached()
-                ) {
-
-                    mediaPlayer.detachViews()
-                }
-
-            } catch (_: Exception) {
-            }
-
-            try {
-                mediaPlayer.release()
-            } catch (_: Exception) {
-            }
-
-            try {
-                libVLC.release()
-            } catch (_: Exception) {
-            }
-        }
+    var movies by remember {
+        mutableStateOf<List<LocalVideo>>(
+            emptyList()
+        )
     }
 
     /*
-     * Crear Media y reproducir
+     * Serie actualmente seleccionada.
      */
+    var currentSeries by remember {
+        mutableStateOf<MediaSeries?>(null)
+    }
 
-    LaunchedEffect(
-        videoUriString,
-        videoReady
-    ) {
+    /*
+     * Episodio actualmente seleccionado.
+     */
+    var currentEpisode by remember {
+        mutableStateOf<Episode?>(null)
+    }
 
-        if (!videoReady) {
-            return@LaunchedEffect
-        }
+    /*
+     * Posición de reproducción guardada.
+     */
+    var playbackPosition by remember {
+        mutableLongStateOf(0L)
+    }
 
-        if (videoUriString.isBlank()) {
-            return@LaunchedEffect
-        }
+    var playbackDuration by remember {
+        mutableLongStateOf(0L)
+    }
+
+    /*
+     * Cargar vídeos.
+     */
+    fun scanLibrary() {
 
         try {
 
-            if (mediaPlayer.isPlaying) {
-                mediaPlayer.stop()
-            }
+            val scanner =
+                VideoScanner(context)
 
-            mediaPlayer.media = null
+            val videos =
+                scanner.scanVideos()
 
-            delay(200L)
+            localVideos =
+                videos
 
-            val uri =
-                Uri.parse(videoUriString)
-
-            val media =
-                Media(
-                    libVLC,
-                    uri
+            /*
+             * Construimos las series.
+             */
+            mediaSeries =
+                scanner.buildMediaSeries(
+                    videos
                 )
 
             /*
-             * Hardware decoding.
+             * Detectamos películas:
+             *
+             * Una carpeta con varios vídeos
+             * se interpreta como serie.
+             *
+             * Un vídeo individual se interpreta
+             * como película.
              */
+            val grouped =
+                scanner.groupVideosByFolder(
+                    videos
+                )
 
-            media.setHWDecoderEnabled(
-                true,
-                false
-            )
-
-            /*
-             * Buffer de red.
-             */
-
-            media.addOption(
-                ":network-caching=1000"
-            )
-
-            /*
-             * Para archivos locales.
-             */
-
-            media.addOption(
-                ":file-caching=500"
-            )
-
-            mediaPlayer.media =
-                media
-
-            media.release()
-
-            delay(300L)
-
-            mediaPlayer.play()
-
-            /*
-             * Restaurar posición después
-             * de iniciar VLC.
-             */
-
-            if (startPositionMs > 0L) {
-
-                delay(1000L)
-
-                try {
-
-                    mediaPlayer.time =
-                        startPositionMs
-                            .coerceAtLeast(0L)
-
-                } catch (_: Exception) {
-                }
-            }
+            movies =
+                grouped.second
 
         } catch (e: Exception) {
 
             e.printStackTrace()
+
+            localVideos =
+                emptyList()
+
+            mediaSeries =
+                emptyList()
+
+            movies =
+                emptyList()
         }
     }
 
     /*
-     * Progreso
+     * Escaneo inicial.
      */
+    LaunchedEffect(Unit) {
 
-    LaunchedEffect(mediaPlayer) {
-
-        while (true) {
-
-            try {
-
-                if (
-                    mediaPlayer.isPlaying
-                ) {
-
-                    currentTimeMs =
-                        mediaPlayer.time
-                            .coerceAtLeast(0L)
-
-                    totalDurationMs =
-                        mediaPlayer.length
-                            .coerceAtLeast(0L)
-
-                    onProgressUpdate(
-                        currentTimeMs,
-                        totalDurationMs
-                    )
-                }
-
-            } catch (_: Exception) {
-            }
-
-            delay(1000L)
-        }
+        scanLibrary()
     }
 
     /*
-     * Obtener pistas
+     * =====================================================
+     * PLAYER
+     * =====================================================
      */
 
-    LaunchedEffect(
-        mediaPlayer,
-        isPlaying
+    if (
+        currentScreen == "PLAYER" &&
+        currentEpisode != null
     ) {
 
-        if (!isPlaying) {
-            return@LaunchedEffect
-        }
-
-        delay(1000L)
-
-        try {
-
-            val tracks =
-                mediaPlayer.audioTracks
-
-            if (tracks != null) {
-
-                audioTracks =
-                    tracks.mapNotNull { track ->
-
-                        if (track != null) {
-
-                            Pair(
-                                track.id,
-                                track.name
-                                    ?: "Audio"
-                            )
-
-                        } else {
-                            null
-                        }
-                    }
-            }
-
-        } catch (_: Exception) {
-        }
-
-        try {
-
-            val tracks =
-                mediaPlayer.spuTracks
-
-            if (tracks != null) {
-
-                subtitleTracks =
-                    tracks.mapNotNull { track ->
-
-                        if (track != null) {
-
-                            Pair(
-                                track.id,
-                                track.name
-                                    ?: "Subtítulos"
-                            )
-
-                        } else {
-                            null
-                        }
-                    }
-            }
-
-        } catch (_: Exception) {
-        }
-    }
-
-    /*
-     * Ocultar controles
-     */
-
-    LaunchedEffect(
-        showControls,
-        isPlaying
-    ) {
-
-        if (
-            showControls &&
-            isPlaying
-        ) {
-
-            delay(5000L)
-
-            showControls = false
-        }
-    }
-
-    /*
-     * Pantalla completa
-     */
-
-    fun toggleFullscreen() {
-
-        val activity =
-            context as? Activity
-                ?: return
-
-        val window =
-            activity.window
-
-        if (!isFullscreen) {
-
-            if (
-                android.os.Build.VERSION.SDK_INT >= 30
-            ) {
-
-                window.insetsController?.let {
-
-                    controller ->
-
-                    controller.hide(
-                        WindowInsets.Type.statusBars() or
-                            WindowInsets.Type.navigationBars()
-                    )
-
-                    controller.systemBarsBehavior =
-                        WindowInsetsController
-                            .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                }
-
-            } else {
-
-                @Suppress("DEPRECATION")
-
-                window.decorView.systemUiVisibility =
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            }
-
-            isFullscreen = true
-
-        } else {
-
-            if (
-                android.os.Build.VERSION.SDK_INT >= 30
-            ) {
-
-                window.insetsController?.show(
-                    WindowInsets.Type.statusBars() or
-                        WindowInsets.Type.navigationBars()
-                )
-
-            } else {
-
-                @Suppress("DEPRECATION")
-
-                window.decorView.systemUiVisibility =
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            }
-
-            isFullscreen = false
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable(
-                interactionSource =
-                    interactionSource,
-                indication = null
-            ) {
-
-                showControls =
-                    !showControls
-            }
-    ) {
+        val episode =
+            currentEpisode!!
 
         /*
-         * VLC VIDEO
+         * Buscar siguiente episodio.
          */
+        val nextEpisode =
+            findNextEpisode(
+                series = currentSeries,
+                currentEpisode = episode
+            )
 
-        AndroidView(
+        VideoPlayerScreen(
 
-            factory = { ctx ->
+            videoUriString =
+                episode.videoPath,
 
-                VLCVideoLayout(ctx).apply {
+            title =
+                episode.title,
 
-                    keepScreenOn = true
+            engine =
+                selectedEngine,
 
-                    try {
+            startPositionMs =
+                playbackPosition,
 
-                        if (
-                            !mediaPlayer
-                                .vlcVout
-                                .areViewsAttached()
-                        ) {
+            nextEpisodeTitle =
+                nextEpisode?.title,
 
-                            mediaPlayer.attachViews(
-                                this,
-                                null,
-                                false,
-                                false
-                            )
-                        }
+            nextEpisodePosterUri =
+                currentSeries?.posterUri,
 
-                        videoReady = true
+            onProgressUpdate = {
+                    position,
+                    duration ->
 
-                    } catch (e: Exception) {
+                playbackPosition =
+                    position
 
-                        e.printStackTrace()
-                    }
+                playbackDuration =
+                    duration
+            },
+
+            onNextEpisode = {
+
+                if (nextEpisode != null) {
+
+                    currentEpisode =
+                        nextEpisode
+
+                    playbackPosition =
+                        0L
+
+                    playbackDuration =
+                        0L
                 }
             },
 
-            update = { layout ->
+            onBack = {
 
-                try {
+                currentScreen =
+                    "HOME"
 
-                    if (
-                        !mediaPlayer
-                            .vlcVout
-                            .areViewsAttached()
-                    ) {
+                playbackPosition =
+                    0L
 
-                        mediaPlayer.attachViews(
-                            layout,
-                            null,
-                            false,
-                            false
-                        )
-                    }
-
-                    videoReady = true
-
-                } catch (e: Exception) {
-
-                    e.printStackTrace()
-                }
-            },
-
-            modifier =
-                Modifier.fillMaxSize()
+                playbackDuration =
+                    0L
+            }
         )
 
-        if (showControls) {
+        return
+    }
 
-            PlayerControlsOverlay(
-                title = title,
+    /*
+     * =====================================================
+     * RESTO DE LA APLICACIÓN
+     * =====================================================
+     *
+     * Acá se mantiene la navegación de la versión actual.
+     *
+     * Si tu HomeScreen/ProfileScreen/SettingsScreen ya existen,
+     * se conectan desde este bloque.
+     */
 
-                isPlaying =
-                    isPlaying,
+    when (currentScreen) {
 
-                currentTimeMs =
-                    currentTimeMs,
+        "PROFILE_SELECTION" -> {
 
-                totalDurationMs =
-                    totalDurationMs,
+            /*
+             * Mantener tu pantalla actual
+             * de selección de perfil.
+             *
+             * Después de seleccionar:
+             */
+            currentScreen =
+                "HOME"
+        }
 
-                isMuted =
-                    isMuted,
+        "HOME" -> {
 
-                volume =
-                    volume,
+            HomeContent(
 
-                speed =
-                    speed,
+                series =
+                    mediaSeries,
 
-                isFullscreen =
-                    isFullscreen,
+                movies =
+                    movies,
 
-                onPlayPauseToggle = {
+                onRefresh = {
+                    scanLibrary()
+                },
 
-                    try {
+                onSeriesSelected = { series ->
 
-                        if (
-                            mediaPlayer.isPlaying
-                        ) {
+                    currentSeries =
+                        series
 
-                            mediaPlayer.pause()
+                    /*
+                     * Si tu Home actualmente abre
+                     * directamente el primer episodio,
+                     * usamos el primero.
+                     *
+                     * Si ya tenés una pantalla de temporadas,
+                     * este callback debe navegar hacia ella.
+                     */
+                    val firstEpisode =
+                        series
+                            .seasons
+                            .firstOrNull()
+                            ?.episodes
+                            ?.firstOrNull()
 
-                        } else {
+                    if (firstEpisode != null) {
 
-                            mediaPlayer.play()
-                        }
+                        currentEpisode =
+                            firstEpisode
 
-                    } catch (_: Exception) {
+                        playbackPosition =
+                            0L
+
+                        currentScreen =
+                            "PLAYER"
                     }
                 },
 
-                onRewind = {
+                onMovieSelected = { movie ->
 
-                    try {
+                    /*
+                     * Las películas se convierten
+                     * temporalmente en un Episode
+                     * para reutilizar VideoPlayerScreen.
+                     */
+                    currentSeries =
+                        null
 
-                        val position =
-                            (
-                                mediaPlayer.time -
-                                    10_000L
-                            ).coerceAtLeast(0L)
+                    currentEpisode =
+                        Episode(
+                            id =
+                                movie.id.toString(),
 
-                        mediaPlayer.time =
-                            position
+                            title =
+                                movie.title,
 
-                        currentTimeMs =
-                            position
+                            videoPath =
+                                movie.uri.toString(),
 
-                    } catch (_: Exception) {
-                    }
-                },
-
-                onForward = {
-
-                    try {
-
-                        val duration =
-                            mediaPlayer.length
-                                .coerceAtLeast(0L)
-
-                        val position =
-                            (
-                                mediaPlayer.time +
-                                    10_000L
-                            ).coerceAtMost(
-                                duration
-                            )
-
-                        mediaPlayer.time =
-                            position
-
-                        currentTimeMs =
-                            position
-
-                    } catch (_: Exception) {
-                    }
-                },
-
-                onSeek = { position ->
-
-                    try {
-
-                        mediaPlayer.time =
-                            position
-
-                        currentTimeMs =
-                            position
-
-                    } catch (_: Exception) {
-                    }
-                },
-
-                onVolumeChange = { newVolume ->
-
-                    val audioManager =
-                        context.getSystemService(
-                            Context.AUDIO_SERVICE
-                        ) as AudioManager
-
-                    val maxVolume =
-                        audioManager
-                            .getStreamMaxVolume(
-                                AudioManager.STREAM_MUSIC
-                            )
-
-                    val androidVolume =
-                        (
-                            newVolume / 100f *
-                                maxVolume
-                        )
-                            .toInt()
-                            .coerceIn(
-                                0,
-                                maxVolume
-                            )
-
-                    audioManager.setStreamVolume(
-                        AudioManager.STREAM_MUSIC,
-                        androidVolume,
-                        0
-                    )
-
-                    volume =
-                        newVolume
-
-                    isMuted =
-                        newVolume == 0
-                },
-
-                onMuteToggle = {
-
-                    val audioManager =
-                        context.getSystemService(
-                            Context.AUDIO_SERVICE
-                        ) as AudioManager
-
-                    val maxVolume =
-                        audioManager
-                            .getStreamMaxVolume(
-                                AudioManager.STREAM_MUSIC
-                            )
-
-                    if (isMuted) {
-
-                        val restored =
-                            (
-                                maxVolume *
-                                    0.7f
-                            )
-                                .toInt()
-                                .coerceAtLeast(1)
-
-                        audioManager.setStreamVolume(
-                            AudioManager.STREAM_MUSIC,
-                            restored,
-                            0
+                            episodeNumber =
+                                0
                         )
 
-                        volume =
-                            (
-                                restored
-                                    .toFloat() /
-                                    maxVolume *
-                                    100f
-                            )
-                                .toInt()
+                    playbackPosition =
+                        0L
 
-                        isMuted = false
-
-                    } else {
-
-                        audioManager.setStreamVolume(
-                            AudioManager.STREAM_MUSIC,
-                            0,
-                            0
-                        )
-
-                        volume = 0
-
-                        isMuted = true
-                    }
+                    currentScreen =
+                        "PLAYER"
                 },
 
-                onSpeedClick = {
+                onSettings = {
 
-                    showSpeedMenu =
-                        true
-
-                    showAudioMenu =
-                        false
-
-                    showSubtitleMenu =
-                        false
-                },
-
-                onAudioClick = {
-
-                    if (
-                        audioTracks.isNotEmpty()
-                    ) {
-
-                        showAudioMenu =
-                            true
-
-                        showSpeedMenu =
-                            false
-
-                        showSubtitleMenu =
-                            false
-                    }
-                },
-
-                onSubtitleClick = {
-
-                    if (
-                        subtitleTracks.isNotEmpty()
-                    ) {
-
-                        showSubtitleMenu =
-                            true
-
-                        showSpeedMenu =
-                            false
-
-                        showAudioMenu =
-                            false
-                    }
-                },
-
-                onFullscreenToggle = {
-
-                    toggleFullscreen()
-                },
-
-                onBack = onBack
+                    currentScreen =
+                        "SETTINGS"
+                }
             )
         }
 
-        /*
-         * MENÚ VELOCIDAD
-         */
+        "SETTINGS" -> {
 
-        DropdownMenu(
+            SettingsContent(
 
-            expanded =
-                showSpeedMenu,
+                selectedEngine =
+                    selectedEngine,
 
-            onDismissRequest = {
-                showSpeedMenu = false
-            },
+                onEngineChanged = {
+                    engine ->
 
-            modifier =
-                Modifier
-                    .background(
-                        Color(0xFF202020)
-                    )
-        ) {
+                    selectedEngine =
+                        engine
+                },
 
-            listOf(
-                0.5f,
-                0.75f,
-                1f,
-                1.25f,
-                1.5f,
-                2f
-            ).forEach { selectedSpeed ->
+                onBack = {
 
-                DropdownMenuItem(
-
-                    text = {
-
-                        Text(
-                            text =
-                                if (
-                                    selectedSpeed == 1f
-                                ) {
-                                    "Normal"
-                                } else {
-                                    "${selectedSpeed}x"
-                                },
-
-                            color =
-                                Color.White
-                        )
-                    },
-
-                    onClick = {
-
-                        try {
-
-                            mediaPlayer.rate =
-                                selectedSpeed
-
-                        } catch (_: Exception) {
-                        }
-
-                        speed =
-                            selectedSpeed
-
-                        showSpeedMenu =
-                            false
-                    }
-                )
-            }
-        }
-
-        /*
-         * MENÚ AUDIO
-         */
-
-        DropdownMenu(
-
-            expanded =
-                showAudioMenu,
-
-            onDismissRequest = {
-                showAudioMenu = false
-            },
-
-            modifier =
-                Modifier
-                    .background(
-                        Color(0xFF202020)
-                    )
-        ) {
-
-            audioTracks.forEach { track ->
-
-                DropdownMenuItem(
-
-                    text = {
-
-                        Text(
-                            text =
-                                track.second,
-
-                            color =
-                                Color.White
-                        )
-                    },
-
-                    onClick = {
-
-                        try {
-
-                            mediaPlayer
-                                .setAudioTrack(
-                                    track.first
-                                )
-
-                        } catch (_: Exception) {
-                        }
-
-                        showAudioMenu =
-                            false
-                    }
-                )
-            }
-        }
-
-        /*
-         * MENÚ SUBTÍTULOS
-         */
-
-        DropdownMenu(
-
-            expanded =
-                showSubtitleMenu,
-
-            onDismissRequest = {
-                showSubtitleMenu = false
-            },
-
-            modifier =
-                Modifier
-                    .background(
-                        Color(0xFF202020)
-                    )
-        ) {
-
-            subtitleTracks.forEach { track ->
-
-                DropdownMenuItem(
-
-                    text = {
-
-                        Text(
-                            text =
-                                track.second,
-
-                            color =
-                                Color.White
-                        )
-                    },
-
-                    onClick = {
-
-                        try {
-
-                            mediaPlayer
-                                .setSpuTrack(
-                                    track.first
-                                )
-
-                        } catch (_: Exception) {
-                        }
-
-                        showSubtitleMenu =
-                            false
-                    }
-                )
-            }
+                    currentScreen =
+                        "HOME"
+                }
+            )
         }
     }
 }
 
-/* =========================================================
- * CONTROLES VLC
- * ========================================================= */
-
-@Composable
-private fun PlayerControlsOverlay(
-    title: String,
-    isPlaying: Boolean,
-    currentTimeMs: Long,
-    totalDurationMs: Long,
-    isMuted: Boolean,
-    volume: Int,
-    speed: Float,
-    isFullscreen: Boolean,
-    onPlayPauseToggle: () -> Unit,
-    onRewind: () -> Unit,
-    onForward: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onVolumeChange: (Int) -> Unit,
-    onMuteToggle: () -> Unit,
-    onSpeedClick: () -> Unit,
-    onAudioClick: () -> Unit,
-    onSubtitleClick: () -> Unit,
-    onFullscreenToggle: () -> Unit,
-    onBack: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Color.Black.copy(
-                    alpha = 0.45f
-                )
-            )
-            .padding(
-                horizontal = 24.dp,
-                vertical = 18.dp
-            )
-    ) {
-
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .align(
-                        Alignment.TopCenter
-                    )
-        ) {
-
-            IconButton(
-                onClick = onBack
-            ) {
-
-                Icon(
-                    imageVector =
-                        Icons.Default.ArrowBack,
-
-                    contentDescription =
-                        "Volver",
-
-                    tint =
-                        Color.White
-                )
-            }
-
-            Spacer(
-                modifier =
-                    Modifier.width(10.dp)
-            )
-
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight =
-                    FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-
-            horizontalArrangement =
-                Arrangement.Center,
-
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .align(
-                        Alignment.Center
-                    )
-        ) {
-
-            IconButton(
-                onClick = onRewind,
-                modifier =
-                    Modifier.size(64.dp)
-            ) {
-
-                Icon(
-                    imageVector =
-                        Icons.Default.Replay10,
-
-                    contentDescription =
-                        "Retroceder 10 segundos",
-
-                    tint =
-                        Color.White,
-
-                    modifier =
-                        Modifier.size(42.dp)
-                )
-            }
-
-            Spacer(
-                modifier =
-                    Modifier.width(24.dp)
-            )
-
-            IconButton(
-
-                onClick =
-                    onPlayPauseToggle,
-
-                modifier =
-                    Modifier
-                        .size(74.dp)
-                        .background(
-                            Color.White,
-                            CircleShape
-                        )
-            ) {
-
-                Icon(
-                    imageVector =
-                        if (isPlaying) {
-                            Icons.Default.Pause
-                        } else {
-                            Icons.Default.PlayArrow
-                        },
-
-                    contentDescription =
-                        if (isPlaying) {
-                            "Pausar"
-                        } else {
-                            "Reproducir"
-                        },
-
-                    tint =
-                        Color.Black,
-
-                    modifier =
-                        Modifier.size(46.dp)
-                )
-            }
-
-            Spacer(
-                modifier =
-                    Modifier.width(24.dp)
-            )
-
-            IconButton(
-                onClick = onForward,
-                modifier =
-                    Modifier.size(64.dp)
-            ) {
-
-                Icon(
-                    imageVector =
-                        Icons.Default.Forward10,
-
-                    contentDescription =
-                        "Adelantar 10 segundos",
-
-                    tint =
-                        Color.White,
-
-                    modifier =
-                        Modifier.size(42.dp)
-                )
-            }
-        }
-
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .align(
-                        Alignment.BottomCenter
-                    )
-        ) {
-
-            Slider(
-
-                value =
-                    if (
-                        totalDurationMs > 0L
-                    ) {
-
-                        (
-                            currentTimeMs
-                                .toFloat() /
-                                totalDurationMs
-                                    .toFloat()
-                        )
-                            .coerceIn(
-                                0f,
-                                1f
-                            )
-
-                    } else {
-                        0f
-                    },
-
-                onValueChange = { fraction ->
-
-                    if (
-                        totalDurationMs > 0L
-                    ) {
-
-                        onSeek(
-                            (
-                                fraction *
-                                    totalDurationMs
-                            ).toLong()
-                        )
-                    }
-                },
-
-                colors =
-                    SliderDefaults.colors(
-                        thumbColor =
-                            Color(0xFFE50914),
-
-                        activeTrackColor =
-                            Color(0xFFE50914),
-
-                        inactiveTrackColor =
-                            Color.White.copy(
-                                alpha = 0.35f
-                            )
-                    ),
-
-                modifier =
-                    Modifier.fillMaxWidth()
-            )
-
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                horizontalArrangement =
-                    Arrangement.SpaceBetween
-            ) {
-
-                Text(
-                    text =
-                        formatTime(
-                            currentTimeMs
-                        ),
-
-                    color =
-                        Color.White,
-
-                    fontSize = 12.sp
-                )
-
-                Text(
-                    text =
-                        formatTime(
-                            totalDurationMs
-                        ),
-
-                    color =
-                        Color.White,
-
-                    fontSize = 12.sp
-                )
-            }
-
-            Spacer(
-                modifier =
-                    Modifier.height(8.dp)
-            )
-
-            Row(
-                verticalAlignment =
-                    Alignment.CenterVertically,
-
-                horizontalArrangement =
-                    Arrangement.End,
-
-                modifier =
-                    Modifier.fillMaxWidth()
-            ) {
-
-                IconButton(
-                    onClick =
-                        onMuteToggle
-                ) {
-
-                    Icon(
-                        imageVector =
-                            when {
-
-                                isMuted ->
-                                    Icons.Default.VolumeOff
-
-                                volume < 50 ->
-                                    Icons.Default.VolumeDown
-
-                                else ->
-                                    Icons.Default.VolumeUp
-                            },
-
-                        contentDescription =
-                            "Volumen",
-
-                        tint =
-                            Color.White
-                    )
-                }
-
-                Text(
-                    text =
-                        "$volume%",
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        12.sp
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
-                )
-
-                IconButton(
-                    onClick =
-                        onSpeedClick
-                ) {
-
-                    Icon(
-                        imageVector =
-                            Icons.Default.Speed,
-
-                        contentDescription =
-                            "Velocidad",
-
-                        tint =
-                            Color.White
-                    )
-                }
-
-                Text(
-                    text =
-                        if (speed == 1f) {
-                            "1x"
-                        } else {
-                            "${speed}x"
-                        },
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        12.sp
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
-                )
-
-                IconButton(
-                    onClick =
-                        onAudioClick
-                ) {
-
-                    Icon(
-                        imageVector =
-                            Icons.Default.AudioFile,
-
-                        contentDescription =
-                            "Audio",
-
-                        tint =
-                            Color.White
-                    )
-                }
-
-                IconButton(
-                    onClick =
-                        onSubtitleClick
-                ) {
-
-                    Icon(
-                        imageVector =
-                            Icons.Default.ClosedCaption,
-
-                        contentDescription =
-                            "Subtítulos",
-
-                        tint =
-                            Color.White
-                    )
-                }
-
-                IconButton(
-                    onClick =
-                        onFullscreenToggle
-                ) {
-
-                    Icon(
-                        imageVector =
-                            if (isFullscreen) {
-                                Icons.Default.FullscreenExit
-                            } else {
-                                Icons.Default.Fullscreen
-                            },
-
-                        contentDescription =
-                            "Pantalla completa",
-
-                        tint =
-                            Color.White
-                    )
-                }
-            }
-        }
-    }
-}
 
 /* =========================================================
  * SIGUIENTE EPISODIO
  * ========================================================= */
 
-@Composable
-private fun NextEpisodeOverlay(
-    nextTitle: String,
-    posterUri: Uri?,
-    onPlayNow: () -> Unit,
-    onCancel: () -> Unit
-) {
-    var secondsLeft by remember {
-        mutableIntStateOf(10)
+private fun findNextEpisode(
+    series: MediaSeries?,
+    currentEpisode: Episode
+): Episode? {
+
+    if (series == null) {
+        return null
     }
 
-    LaunchedEffect(Unit) {
+    val allEpisodes =
+        series.seasons
+            .sortedBy {
+                it.seasonNumber
+            }
+            .flatMap { season ->
 
-        while (secondsLeft > 0) {
-
-            delay(1000L)
-
-            secondsLeft--
-        }
-
-        onPlayNow()
-    }
-
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Color.Black.copy(
-                        alpha = 0.88f
-                    )
-                ),
-
-        contentAlignment =
-            Alignment.BottomEnd
-    ) {
-
-        Column(
-
-            modifier =
-                Modifier
-                    .padding(24.dp)
-                    .width(380.dp)
-                    .clip(
-                        RoundedCornerShape(16.dp)
-                    )
-                    .background(
-                        Color(0xFF181818)
-                    )
-                    .padding(18.dp)
-        ) {
-
-            Text(
-                text =
-                    "Siguiente episodio",
-
-                color =
-                    Color.White,
-
-                fontSize =
-                    18.sp,
-
-                fontWeight =
-                    FontWeight.Bold
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.height(6.dp)
-            )
-
-            Text(
-                text =
-                    "Comienza en ${secondsLeft}s",
-
-                color =
-                    Color.Gray,
-
-                fontSize =
-                    13.sp
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.height(14.dp)
-            )
-
-            Row(
-                verticalAlignment =
-                    Alignment.CenterVertically,
-
-                modifier =
-                    Modifier.fillMaxWidth()
-            ) {
-
-                Box(
-                    modifier =
-                        Modifier
-                            .width(110.dp)
-                            .height(65.dp)
-                            .clip(
-                                RoundedCornerShape(8.dp)
-                            )
-                            .background(
-                                Color(0xFF303030)
-                            )
-                ) {
-
-                    if (posterUri != null) {
-
-                        AsyncImage(
-                            model =
-                                posterUri,
-
-                            contentDescription =
-                                null,
-
-                            contentScale =
-                                ContentScale.Crop,
-
-                            modifier =
-                                Modifier.fillMaxSize()
-                        )
-
-                    } else {
-
-                        Icon(
-                            imageVector =
-                                Icons.Default.PlayArrow,
-
-                            contentDescription =
-                                null,
-
-                            tint =
-                                Color.White,
-
-                            modifier =
-                                Modifier
-                                    .size(32.dp)
-                                    .align(
-                                        Alignment.Center
-                                    )
-                        )
+                season.episodes
+                    .sortedBy {
+                        it.episodeNumber
                     }
-                }
-
-                Spacer(
-                    modifier =
-                        Modifier.width(14.dp)
-                )
-
-                Text(
-                    text =
-                        nextTitle,
-
-                    color =
-                        Color.White,
-
-                    fontSize =
-                        15.sp,
-
-                    fontWeight =
-                        FontWeight.SemiBold,
-
-                    modifier =
-                        Modifier.weight(1f)
-                )
             }
 
-            Spacer(
-                modifier =
-                    Modifier.height(18.dp)
-            )
-
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                horizontalArrangement =
-                    Arrangement.End
-            ) {
-
-                Button(
-
-                    onClick =
-                        onCancel,
-
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                Color(0xFF333333)
-                        )
-                ) {
-
-                    Text(
-                        text =
-                            "Cancelar",
-
-                        color =
-                            Color.White
-                    )
-                }
-
-                Spacer(
-                    modifier =
-                        Modifier.width(8.dp)
-                )
-
-                Button(
-
-                    onClick =
-                        onPlayNow,
-
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                Color(0xFFE50914)
-                        )
-                ) {
-
-                    Icon(
-                        imageVector =
-                            Icons.Default.PlayArrow,
-
-                        contentDescription =
-                            null
-                    )
-
-                    Spacer(
-                        modifier =
-                            Modifier.width(4.dp)
-                    )
-
-                    Text(
-                        text =
-                            "Reproducir"
-                    )
-                }
-            }
+    val currentIndex =
+        allEpisodes.indexOfFirst {
+            it.id == currentEpisode.id
         }
+
+    if (currentIndex == -1) {
+        return null
     }
+
+    return allEpisodes
+        .getOrNull(
+            currentIndex + 1
+        )
 }
 
+
 /* =========================================================
- * FORMATO DE TIEMPO
+ * HOME
+ *
+ * Esta función sirve como puente con tu interfaz actual.
  * ========================================================= */
 
-private fun formatTime(
-    ms: Long
-): String {
+@Composable
+private fun HomeContent(
+    series: List<MediaSeries>,
+    movies: List<LocalVideo>,
+    onRefresh: () -> Unit,
+    onSeriesSelected: (MediaSeries) -> Unit,
+    onMovieSelected: (LocalVideo) -> Unit,
+    onSettings: () -> Unit
+) {
 
-    val totalSeconds =
-        (ms / 1000L)
-            .coerceAtLeast(0L)
+    /*
+     * IMPORTANTE:
+     *
+     * Acá tenés que colocar el contenido de tu
+     * HomeScreen actual.
+     *
+     * Los datos nuevos ya están preparados:
+     *
+     * series
+     * movies
+     *
+     * y los callbacks:
+     *
+     * onSeriesSelected()
+     * onMovieSelected()
+     * onRefresh()
+     * onSettings()
+     */
 
-    val seconds =
-        totalSeconds % 60L
+    androidx.compose.material3.Text(
+        text =
+            "Netflix Local"
+    )
+}
 
-    val totalMinutes =
-        totalSeconds / 60L
 
-    val minutes =
-        totalMinutes % 60L
+/* =========================================================
+ * SETTINGS
+ * ========================================================= */
 
-    val hours =
-        totalMinutes / 60L
+@Composable
+private fun SettingsContent(
+    selectedEngine: String,
+    onEngineChanged: (String) -> Unit,
+    onBack: () -> Unit
+) {
 
-    return if (hours > 0L) {
+    /*
+     * Conectá acá tu SettingsScreen actual.
+     *
+     * El motor se mantiene compatible con
+     * VideoPlayerScreen:
+     *
+     * EXOPLAYER
+     * VLC
+     */
 
-        String.format(
-            Locale.US,
-            "%d:%02d:%02d",
-            hours,
-            minutes,
-            seconds
-        )
-
-    } else {
-
-        String.format(
-            Locale.US,
-            "%02d:%02d",
-            minutes,
-            seconds
-        )
-    }
+    androidx.compose.material3.Text(
+        text =
+            "Motor actual: $selectedEngine"
+    )
 }
